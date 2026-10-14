@@ -1,0 +1,25 @@
+[sistema-teletrabajo]
+user = www-data
+group = www-data
+
+listen = /run/php/php8.5-fpm-sistema-teletrabajo.sock
+listen.owner = www-data
+listen.group = www-data
+listen.mode = 0660
+
+pm = dynamic
+pm.max_children = 20
+pm.start_servers = 4
+pm.min_spare_servers = 2
+pm.max_spare_servers = 6
+pm.max_requests = 500
+
+clear_env = yes
+catch_workers_output = yes
+decorate_workers_output = no
+security.limit_extensions = .php
+chdir = /var/www/sistema-teletrabajo
+
+php_admin_flag[display_errors] = off
+php_admin_flag[log_errors] = on
+php_admin_value[error_log] = /var/log/php/sistema-teletrabajo-fpm.log

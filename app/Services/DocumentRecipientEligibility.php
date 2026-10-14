@@ -1,0 +1,96 @@
+<?php
+
+namespace App\Services;
+
+use App\Enums\OrganizationalUnitType;
+use App\Enums\RoleName;
+use App\Enums\UserStatus;
+use App\Models\DocumentRecipient;
+use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Validation\ValidationException;
+
+class DocumentRecipientEligibility
+{
+    /** @return Builder<User> */
+    public function personalCandidates(): Builder
+    {
+        return User::query()
+            ->where('status', UserStatus::ACTIVE->value)
+            ->whereNotNull('organizational_unit_id')
+            ->whereHas('organizationalUnit', function (Builder $query): void {
+                $query->where('is_active', true)->whereIn('type', [
+                    OrganizationalUnitType::CAREER->value,
+                    OrganizationalUnitType::KARDEX->value,
+                ]);
+            })
+            ->whereHas('roles', function (Builder $query): void {
+                $query->whereIn('name', [
+                    RoleName::CAREER_HEAD->value,
+                    RoleName::SECRETARY->value,
+                    RoleName::SECRETARY_ASSISTANT->value,
+                ]);
+            });
+    }
+
+    public function assertPersonalCandidate(User $user, bool $requiresResponse): void
+    {
+        $user->loadMissing(['organizationalUnit', 'roles']);
+        $role = $user->roleName();
+
+        if ($user->status !== UserStatus::ACTIVE
+            || ! $user->organizationalUnit
+            || ! $user->organizationalUnit->is_active
+            || ! in_array($user->organizationalUnit->type, [
+                OrganizationalUnitType::CAREER,
+                OrganizationalUnitType::KARDEX,
+            ], true)
+            || ! $role?->canBePersonalDocumentRecipient()) {
+            throw ValidationException::withMessages([
+                'user_id' => 'Seleccione un Jefe de Carrera, Secretaria o Auxiliar activo de una carrera autorizada.',
+            ]);
+        }
+
+        if ($requiresResponse && ! $role->canBeFormalPersonalDocumentRecipient()) {
+            throw ValidationException::withMessages([
+                'requires_response' => 'Un Auxiliar de Secretaría solo puede agregarse como copia informativa.',
+            ]);
+        }
+    }
+
+    public function assertPreparedRecipient(DocumentRecipient $recipient): void
+    {
+        $unit = $recipient->unit()->first();
+
+        if (! $unit
+            || ! $unit->is_active
+            || ! in_array($unit->type, [
+                OrganizationalUnitType::CAREER,
+                OrganizationalUnitType::KARDEX,
+            ], true)) {
+            throw ValidationException::withMessages([
+                'recipients' => 'Uno de los destinatarios pertenece a una unidad inactiva o no autorizada.',
+            ]);
+        }
+
+        if ($recipient->user_id === null) {
+            return;
+        }
+
+        $user = User::query()->with(['organizationalUnit', 'roles'])->find($recipient->user_id);
+
+        if (! $user || $user->organizational_unit_id !== $recipient->unit_id) {
+            throw ValidationException::withMessages([
+                'recipients' => 'Uno de los destinatarios personales ya no pertenece a la unidad registrada.',
+            ]);
+        }
+
+        try {
+            $this->assertPersonalCandidate($user, $recipient->requires_response);
+        } catch (ValidationException $exception) {
+            throw ValidationException::withMessages([
+                'recipients' => $exception->validator->errors()->first(),
+            ]);
+        }
+    }
+}

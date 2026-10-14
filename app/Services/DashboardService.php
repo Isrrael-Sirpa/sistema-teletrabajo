@@ -1,0 +1,269 @@
+<?php
+
+namespace App\Services;
+
+use App\Enums\DocumentConfidentiality;
+use App\Enums\DocumentEventType;
+use App\Enums\DocumentPriority;
+use App\Enums\DocumentStatus;
+use App\Enums\OrganizationalUnitType;
+use App\Enums\PermissionName;
+use App\Enums\RoleName;
+use App\Enums\UserStatus;
+use App\Models\Document;
+use App\Models\OrganizationalUnit;
+use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
+
+class DashboardService
+{
+    public function __construct(
+        private readonly DocumentWorkQueryService $workQueries,
+        private readonly DocumentDeadlineService $deadlines,
+        private readonly DelegatedAuthorizationService $delegations,
+    ) {}
+
+    /** @return array<string, mixed> */
+    public function for(User $user): array
+    {
+        $user->loadMissing(['roles', 'organizationalUnit']);
+        $role = $user->roleName();
+        $unreadCount = $user->unreadNotifications()->count();
+        $temporaryHeadships = $this->delegations->activeFor($user);
+        $cards = match ($role) {
+            RoleName::ADMINISTRATOR, RoleName::CO_ADMINISTRATOR => $this->globalCards($unreadCount),
+            RoleName::CAREER_HEAD => $this->headCards($user, $unreadCount),
+            RoleName::SECRETARY => $this->secretaryCards($user, $unreadCount),
+            RoleName::SECRETARY_ASSISTANT => $this->assistantCards($user, $unreadCount),
+            RoleName::EXTRA => $this->extraCards($user, $unreadCount),
+            default => [$this->notificationCard($unreadCount)],
+        };
+
+        return [
+            'role' => $role,
+            'roleLabel' => $role?->label() ?? 'Usuario',
+            'scopeLabel' => $role?->isGlobal() === true
+                ? 'Ámbito institucional'
+                : ($user->organizationalUnit?->name ?? 'Sin unidad asignada'),
+            'cards' => $cards,
+            'quickLinks' => $this->quickLinks($user, $role),
+            'attentionTitle' => $role === RoleName::EXTRA
+                ? 'Documentos autorizados recientes'
+                : 'Necesitan su atención',
+            'attention' => $this->attention($user, $role),
+            'unreadNotificationCount' => $unreadCount,
+            'temporaryHeadships' => $temporaryHeadships,
+        ];
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private function globalCards(int $unreadCount): array
+    {
+        $now = $this->deadlines->normalizeNow();
+        $cutoff = $this->deadlines->dueSoonCutoff($now);
+        $counts = Document::query()->selectRaw(
+            'SUM(CASE WHEN general_status = ? THEN 1 ELSE 0 END) AS sent_count,
+             SUM(CASE WHEN general_status = ? THEN 1 ELSE 0 END) AS review_count,
+             SUM(CASE WHEN general_status = ? THEN 1 ELSE 0 END) AS returned_count,
+             SUM(CASE WHEN due_at IS NOT NULL AND due_at <= ? AND general_status IN (?, ?, ?, ?) THEN 1 ELSE 0 END) AS overdue_count,
+             SUM(CASE WHEN due_at > ? AND due_at <= ? AND general_status IN (?, ?, ?, ?) THEN 1 ELSE 0 END) AS due_soon_count',
+            [
+                DocumentStatus::SENT->value,
+                DocumentStatus::IN_REVIEW->value,
+                DocumentStatus::RETURNED->value,
+                $now,
+                ...DocumentStatus::deadlineActionableValues(),
+                $now,
+                $cutoff,
+                ...DocumentStatus::deadlineActionableValues(),
+            ],
+        )->first();
+
+        return [
+            $this->card('Documentos enviados pendientes', (int) $counts->sent_count, route('documents.index', ['status' => 'sent']), 'Esperan recepción o trámite.'),
+            $this->card('Documentos en revisión', (int) $counts->review_count, route('documents.index', ['status' => 'in_review']), 'Revisión institucional activa.'),
+            $this->card('Documentos devueltos', (int) $counts->returned_count, route('documents.index', ['status' => 'returned']), 'Requieren corrección del origen.'),
+            $this->card('Vencidos', (int) $counts->overdue_count, route('documents.index', ['deadline' => 'overdue']), 'Atención inmediata.', 'danger'),
+            $this->card('Próximos a vencer', (int) $counts->due_soon_count, route('documents.index', ['deadline' => 'due_soon']), 'Dentro de los próximos '.$this->deadlines->dueSoonDays().' días.', 'warning'),
+            $this->notificationCard($unreadCount),
+            $this->card('Usuarios activos', User::query()->where('status', UserStatus::ACTIVE->value)->count(), route('users.index', ['status' => 'active']), 'Cuentas institucionales habilitadas.'),
+            $this->card('Carreras activas', OrganizationalUnit::query()->careers()->active()->count(), route('units.index', ['type' => OrganizationalUnitType::CAREER->value, 'status' => 'active']), 'Carreras disponibles.'),
+        ];
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private function headCards(User $user, int $unreadCount): array
+    {
+        return [
+            $this->workCard($user, 'Pendientes de recibir', 'pending_receive', 'Enviados a su carrera y aún no recibidos.'),
+            $this->workCard($user, 'En revisión', 'in_review', 'Trámites activos de su carrera.'),
+            $this->workCard($user, 'Requieren decisión', 'decision', 'Puede aprobar, devolver o rechazar.'),
+            $this->workCard($user, 'Devueltos al origen', 'returned_correction', 'Pendientes de corrección o reenvío.'),
+            ...$this->deadlineCards($user),
+            $this->notificationCard($unreadCount),
+        ];
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private function secretaryCards(User $user, int $unreadCount): array
+    {
+        return [
+            $this->workCard($user, 'Pendientes de recibir', 'pending_receive', 'Enviados a su carrera y aún no recibidos.'),
+            $this->workCard($user, 'En revisión', 'in_review', 'Trámites activos en los que participa.'),
+            $this->workCard($user, 'Requieren decisión', 'decision', 'Puede aprobar, devolver o rechazar.'),
+            $this->workCard($user, 'Mis borradores', 'my_drafts', 'Documentos propios aún no enviados.'),
+            $this->workCard($user, 'Devueltos para corregir', 'returned_correction', 'Documentos propios pendientes de reenvío.'),
+            ...$this->deadlineCards($user),
+            $this->notificationCard($unreadCount),
+        ];
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private function assistantCards(User $user, int $unreadCount): array
+    {
+        return [
+            $this->workCard($user, 'Documentos para colaborar', 'collaboration', 'Trabajo visible compatible con apoyo de revisión.'),
+            $this->workCard($user, 'En revisión', 'in_review', 'Documentos de su ámbito en revisión.'),
+            $this->workCard($user, 'Asignados a mí', 'assigned', 'Revisiones donde figura como responsable actual.'),
+            ...$this->deadlineCards($user),
+            $this->notificationCard($unreadCount),
+        ];
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private function extraCards(User $user, int $unreadCount): array
+    {
+        return [
+            $this->workCard($user, 'Documentos autorizados', 'authorized', 'Accesos explícitos vigentes.'),
+            $this->notificationCard($unreadCount),
+        ];
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private function deadlineCards(User $user): array
+    {
+        $now = $this->deadlines->normalizeNow();
+
+        return [
+            $this->card(
+                'Próximos a vencer',
+                (clone $this->workQueries->visibleTo($user))->dueSoon($now, $this->deadlines->dueSoonCutoff($now))->count(),
+                route('documents.index', ['deadline' => 'due_soon']),
+                'Dentro de los próximos '.$this->deadlines->dueSoonDays().' días.',
+                'warning',
+            ),
+            $this->card(
+                'Vencidos',
+                (clone $this->workQueries->visibleTo($user))->overdue($now)->count(),
+                route('documents.index', ['deadline' => 'overdue']),
+                'Documentos visibles fuera de plazo.',
+                'danger',
+            ),
+        ];
+    }
+
+    private function workCard(User $user, string $label, string $work, string $description): array
+    {
+        $query = $this->workQueries->visibleTo($user);
+        $this->workQueries->apply($query, $user, $work);
+
+        return $this->card($label, $query->count(), route('documents.index', ['work' => $work]), $description);
+    }
+
+    private function notificationCard(int $count): array
+    {
+        return $this->card('Notificaciones sin leer', $count, route('notifications.index'), 'Avisos pendientes de lectura.');
+    }
+
+    /** @return Collection<int, array<string, mixed>> */
+    private function attention(User $user, ?RoleName $role): Collection
+    {
+        $now = $this->deadlines->normalizeNow();
+        $cutoff = $this->deadlines->dueSoonCutoff($now);
+        $query = $this->workQueries->visibleTo($user)
+            ->with(['documentType:id,name', 'originUnit:id,name'])
+            ->withMax([
+                'events as last_correction_version_event_id' => fn (Builder $events) => $events
+                    ->where('event_type', DocumentEventType::DOCUMENT_VERSION_CREATED->value),
+            ], 'id')
+            ->withMax([
+                'events as last_correction_sent_event_id' => fn (Builder $events) => $events
+                    ->where('event_type', DocumentEventType::CORRECTION_SENT->value),
+            ], 'id');
+
+        $this->workQueries->attention($query, $user);
+
+        if ($role === RoleName::EXTRA) {
+            $query->latest('documents.updated_at');
+        } else {
+            $query
+                ->orderByRaw(
+                    'CASE
+                        WHEN due_at IS NOT NULL AND due_at <= ? AND general_status IN (?, ?, ?, ?) THEN 0
+                        WHEN priority = ? THEN 1
+                        WHEN due_at > ? AND due_at <= ? AND general_status IN (?, ?, ?, ?) THEN 2
+                        WHEN priority = ? THEN 3
+                        ELSE 4
+                    END',
+                    [
+                        $now,
+                        ...DocumentStatus::deadlineActionableValues(),
+                        DocumentPriority::URGENT->value,
+                        $now,
+                        $cutoff,
+                        ...DocumentStatus::deadlineActionableValues(),
+                        DocumentPriority::IMPORTANT->value,
+                    ],
+                )
+                ->orderBy('documents.created_at');
+        }
+
+        return $query->limit(5)->get()->map(function (Document $document) use ($user, $now): array {
+            $lastVersion = (int) ($document->last_correction_version_event_id ?? 0);
+            $lastSent = (int) ($document->last_correction_sent_event_id ?? 0);
+
+            return [
+                'document' => $document,
+                'subject' => $user->hasInstitutionalGlobalScope()
+                    && $document->confidentiality === DocumentConfidentiality::RESTRICTED
+                        ? 'Documento de acceso restringido'
+                        : $document->subject,
+                'deadlineStatus' => $this->deadlines->status($document, $now),
+                'correctionPrepared' => $document->general_status === DocumentStatus::RETURNED
+                    && $lastVersion > $lastSent,
+            ];
+        });
+    }
+
+    /** @return array<int, array{label: string, url: string}> */
+    private function quickLinks(User $user, ?RoleName $role): array
+    {
+        $links = [];
+
+        if ($user->can('documents.view') || $this->delegations->hasAny($user, PermissionName::DOCUMENTS_VIEW)) {
+            $links[] = ['label' => $role === RoleName::EXTRA ? 'Ver documentos autorizados' : 'Ver documentos', 'url' => route('documents.index')];
+        }
+        if ($user->can('documents.create') || $this->delegations->hasAny($user, PermissionName::DOCUMENTS_CREATE)) {
+            $links[] = ['label' => 'Crear borrador', 'url' => route('documents.create')];
+        }
+        if ($user->can('users.view') || $this->delegations->hasAny($user, PermissionName::USERS_VIEW)) {
+            $links[] = ['label' => 'Gestionar usuarios', 'url' => route('users.index')];
+        }
+        if ($user->can('units.view')) {
+            $links[] = ['label' => 'Ver carreras y unidades', 'url' => route('units.index')];
+        }
+        if ($user->can('document_types.view')) {
+            $links[] = ['label' => 'Ver tipos documentales', 'url' => route('document-types.index')];
+        }
+        $links[] = ['label' => 'Abrir notificaciones', 'url' => route('notifications.index')];
+
+        return $links;
+    }
+
+    /** @return array{label: string, count: int, url: string, description: string, tone: string} */
+    private function card(string $label, int $count, string $url, string $description, string $tone = 'neutral'): array
+    {
+        return compact('label', 'count', 'url', 'description', 'tone');
+    }
+}
