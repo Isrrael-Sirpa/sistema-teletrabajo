@@ -7,7 +7,7 @@
                 <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600">Resumen histórico y detalle de documentos dentro de su ámbito autorizado.</p>
             </div>
             @can('reports.export')
-                <a href="{{ route('reports.documents.csv', $filters) }}" class="inline-flex min-h-11 items-center justify-center rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-800">
+                <a href="{{ route('reports.documents.csv', $filters) }}" class="ft-button-primary">
                     Exportar CSV
                 </a>
             @endcan
@@ -17,7 +17,7 @@
             <div role="alert" class="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-900">{{ $errors->first('export') }}</div>
         @endif
 
-        <form method="GET" action="{{ route('reports.documents.index') }}" class="space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm" aria-label="Filtros del reporte documental">
+        <form method="GET" action="{{ route('reports.documents.index') }}" class="ft-card space-y-4 p-4 sm:p-5" aria-label="Filtros del reporte documental">
             <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <label class="text-sm font-semibold text-slate-700">Reporte
                     <select name="report" class="mt-1 min-h-11 w-full rounded-lg border-slate-300">
@@ -79,8 +79,8 @@
             </details>
 
             <div class="flex flex-wrap gap-3">
-                <button type="submit" class="min-h-11 rounded-lg bg-blue-800 px-5 py-2 font-bold text-white hover:bg-blue-900">Generar reporte</button>
-                <a href="{{ route('reports.documents.index') }}" class="min-h-11 rounded-lg border border-slate-300 px-5 py-2 font-bold text-slate-700 hover:bg-slate-50">Limpiar filtros</a>
+                <button type="submit" class="ft-button-primary">Generar reporte</button>
+                <a href="{{ route('reports.documents.index') }}" class="ft-button-secondary">Limpiar filtros</a>
             </div>
             @if ($errors->any() && ! $errors->has('export'))
                 <div role="alert" class="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">{{ $errors->first() }}</div>
@@ -115,7 +115,7 @@
                     <thead class="bg-slate-50 text-xs uppercase text-slate-600"><tr><th class="px-4 py-3">Documento</th><th class="px-4 py-3">Origen</th><th class="px-4 py-3">Estado</th><th class="px-4 py-3">Prioridad</th><th class="px-4 py-3">Fecha de envío</th><th class="px-4 py-3">Vencimiento</th><th class="px-4 py-3 text-right">Destinatarios</th></tr></thead>
                     <tbody class="divide-y divide-slate-100">
                         @forelse ($documents as $document)
-                            <tr><td class="px-4 py-3"><a href="{{ route('documents.show', $document) }}" class="font-semibold text-blue-800 hover:underline">{{ $document->subject }}</a><p class="mt-1 text-xs text-slate-500">{{ $document->code ?? 'Borrador sin código' }} · {{ $document->documentType->name }}</p></td><td class="px-4 py-3 text-slate-700">{{ $document->originUnit->name }}</td><td class="px-4 py-3">{{ $document->general_status->label() }}</td><td class="px-4 py-3">{{ $document->priority->label() }}</td><td class="px-4 py-3 whitespace-nowrap">{{ $document->sent_at?->timezone(config('app.timezone'))->format('d/m/Y H:i') ?? 'No enviado' }}</td><td class="px-4 py-3">{{ $deadlineStatuses[$document->id]->label() }}</td><td class="px-4 py-3 text-right">{{ $document->recipients_count }}</td></tr>
+                            <tr><td class="px-4 py-3"><a href="{{ route('documents.show', $document) }}" class="font-semibold text-blue-800 hover:underline">{{ $document->subject }}</a><p class="mt-1 text-xs text-slate-500">{{ $document->code ?? 'Borrador sin código' }} · {{ $document->documentType->name }}</p></td><td class="px-4 py-3 text-slate-700">{{ $document->originUnit->name }}</td><td class="px-4 py-3"><x-ui.status-badge :status="$document->general_status" /></td><td class="px-4 py-3">{{ $document->priority->label() }}</td><td class="px-4 py-3 whitespace-nowrap">{{ $document->sent_at?->timezone(config('app.timezone'))->format('d/m/Y H:i') ?? 'No enviado' }}</td><td class="px-4 py-3">{{ $deadlineStatuses[$document->id]->label() }}</td><td class="px-4 py-3 text-right">{{ $document->recipients_count }}</td></tr>
                         @empty
                             <tr><td colspan="7" class="px-4 py-8 text-center text-slate-500">No existen documentos autorizados para los filtros aplicados.</td></tr>
                         @endforelse

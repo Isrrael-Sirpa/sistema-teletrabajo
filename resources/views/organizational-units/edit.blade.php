@@ -1,4 +1,4 @@
-<x-layouts.authenticated title="Editar carrera">
+<x-layouts.authenticated title="Editar carrera" :career-unit="$unit">
     <div class="mx-auto max-w-3xl">
         <a href="{{ route('units.show', $unit) }}" class="text-sm font-semibold text-blue-800 underline-offset-4 hover:underline">← Volver al detalle</a>
         <h1 class="mt-4 text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">Editar carrera</h1>

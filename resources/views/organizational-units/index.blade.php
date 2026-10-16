@@ -9,7 +9,7 @@
         </div>
 
         @can('create', App\Models\OrganizationalUnit::class)
-            <a href="{{ route('units.create') }}" class="inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg bg-institutional-700 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-institutional-900">
+            <a href="{{ route('units.create') }}" class="ft-button-primary shrink-0">
                 Agregar carrera
             </a>
         @endcan
@@ -40,13 +40,13 @@
                         <tr>
                             <td class="px-5 py-4">
                                 <a href="{{ route('units.show', $unit) }}" class="font-semibold text-blue-800 underline-offset-4 hover:underline">
-                                    {{ $unit->name }}
+                                    @if($unit->type === App\Enums\OrganizationalUnitType::CAREER)<span data-career="{{ $unit->acronym }}" class="ft-career-dot mr-2" aria-hidden="true"></span>@endif{{ $unit->name }}
                                 </a>
                                 @if ($unit->parent)
                                     <p class="mt-1 text-xs text-slate-500">Pertenece a {{ $unit->parent->name }}</p>
                                 @endif
                             </td>
-                            <td class="px-5 py-4 text-sm font-medium text-slate-700">{{ $unit->acronym }}</td>
+                            <td class="px-5 py-4 text-sm font-bold text-slate-700">{{ $unit->acronym }}</td>
                             <td class="px-5 py-4 text-sm text-slate-700">{{ $unit->type->label() }}</td>
                             <td class="px-5 py-4">
                                 <span @class([
@@ -81,9 +81,7 @@
                             </td>
                         </tr>
                     @empty
-                        <tr>
-                            <td colspan="5" class="px-5 py-10 text-center text-sm text-slate-600">No existen unidades registradas.</td>
-                        </tr>
+                        <tr><td colspan="5" class="px-5 py-10 text-center text-sm text-slate-600"><span class="block font-bold text-slate-800">Todavía no hay carreras registradas.</span><span class="mt-1 block">Las unidades institucionales aparecerán aquí cuando estén disponibles.</span></td></tr>
                     @endforelse
                 </tbody>
             </table>

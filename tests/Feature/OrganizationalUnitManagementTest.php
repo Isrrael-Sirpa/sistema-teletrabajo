@@ -48,6 +48,20 @@ class OrganizationalUnitManagementTest extends TestCase
         $this->assertSame($before, OrganizationalUnit::query()->count());
         $this->assertSame(1, OrganizationalUnit::query()->where('type', OrganizationalUnitType::FACULTY)->count());
         $this->assertSame(1, OrganizationalUnit::query()->where('type', OrganizationalUnitType::KARDEX)->count());
+        $this->assertSame(9, OrganizationalUnit::query()->careers()->count());
+    }
+
+    public function test_rerunning_the_institutional_seeder_preserves_an_administrator_edited_acronym(): void
+    {
+        $career = OrganizationalUnit::query()->where('name', 'Mecánica Automotriz')->sole();
+        $publicId = $career->public_id;
+        $career->update(['acronym' => 'MEC-AUT']);
+
+        $this->seed(InstitutionalStructureSeeder::class);
+
+        $this->assertSame(9, OrganizationalUnit::query()->careers()->count());
+        $this->assertSame('MEC-AUT', $career->fresh()->acronym);
+        $this->assertSame($publicId, $career->fresh()->public_id);
     }
 
     public function test_an_authorized_user_can_open_the_units_crud(): void

@@ -23,7 +23,7 @@
     <div>
         <label for="acronym" class="block text-sm font-semibold text-slate-800">Sigla</label>
         <input id="acronym" name="acronym" type="text" value="{{ old('acronym', $unit?->acronym) }}" required maxlength="20" autocapitalize="characters" class="mt-2 block min-h-12 w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-base uppercase text-slate-950 shadow-sm focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20" aria-describedby="acronym-help" aria-invalid="{{ $errors->has('acronym') ? 'true' : 'false' }}">
-        <p id="acronym-help" class="mt-1.5 text-xs text-slate-500">La sigla se guardará automáticamente en mayúsculas.</p>
+        <p id="acronym-help" class="mt-1.5 text-xs text-slate-600">La sigla se guardará en mayúsculas. Si la cambia, solo los documentos enviados en adelante utilizarán la nueva sigla; los códigos históricos permanecerán iguales.</p>
         @error('acronym')<p class="mt-1.5 text-sm text-red-700">{{ $message }}</p>@enderror
     </div>
 
@@ -41,5 +41,5 @@
 
 <div class="mt-7 flex flex-col-reverse gap-3 border-t border-slate-200 pt-6 sm:flex-row sm:justify-end">
     <a href="{{ $cancelUrl }}" class="inline-flex min-h-11 items-center justify-center rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">Cancelar</a>
-    <button type="submit" class="inline-flex min-h-11 items-center justify-center rounded-lg bg-institutional-700 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-institutional-900">{{ $submitLabel }}</button>
+    <button type="submit" class="ft-button-primary">{{ $submitLabel }}</button>
 </div>

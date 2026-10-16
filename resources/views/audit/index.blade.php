@@ -8,7 +8,7 @@
             </p>
         </header>
 
-        <form method="GET" action="{{ route('audit.index') }}" class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <form method="GET" action="{{ route('audit.index') }}" class="ft-card p-4 sm:p-5" aria-label="Filtros de auditoría">
             <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <label class="text-sm font-medium text-slate-700">
                     Desde
@@ -58,8 +58,8 @@
                 </label>
             </div>
             <div class="mt-4 flex flex-wrap gap-3">
-                <button type="submit" class="min-h-11 rounded-lg bg-blue-800 px-5 py-2 font-semibold text-white hover:bg-blue-900">Aplicar filtros</button>
-                <a href="{{ route('audit.index') }}" class="min-h-11 rounded-lg border border-slate-300 px-5 py-2 font-semibold text-slate-700 hover:bg-slate-50">Limpiar</a>
+                <button type="submit" class="ft-button-primary">Aplicar filtros</button>
+                <a href="{{ route('audit.index') }}" class="ft-button-secondary">Limpiar</a>
             </div>
         </form>
 
@@ -88,7 +88,7 @@
                                 <td class="px-4 py-4 text-slate-800">{{ $log->action->label() }}</td>
                                 <td class="px-4 py-4 text-slate-700">
                                     {{ $resourceTypes[$resourceNames[$log->auditable_type] ?? ''] ?? 'Sin recurso' }}
-                                    @if ($log->auditable_id)<span class="block text-xs text-slate-500">ID {{ $log->auditable_id }}</span>@endif
+                                    @if ($log->auditable_id)<span class="sr-only">Identificador interno {{ $log->auditable_id }}</span>@endif
                                 </td>
                                 <td class="px-4 py-4">
                                     @php($result = $log->result())
@@ -130,7 +130,7 @@
                                 </td>
                             </tr>
                         @empty
-                            <tr><td colspan="7" class="px-4 py-10 text-center text-slate-600">No existen registros para los filtros seleccionados.</td></tr>
+                            <tr><td colspan="7" class="px-4 py-10 text-center text-slate-600"><span class="block font-bold text-slate-800">No hay registros para esta búsqueda.</span><span class="mt-1 block">Ajuste el período o los filtros para ampliar los resultados.</span></td></tr>
                         @endforelse
                     </tbody>
                 </table>

@@ -6,7 +6,7 @@
             <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600">Listado de documentos visibles dentro de su ámbito autorizado.</p>
         </div>
         @can('create', App\Models\Document::class)
-            <a href="{{ route('documents.create') }}" class="inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg bg-institutional-700 px-4 py-2.5 text-sm font-bold text-white hover:bg-institutional-900">Crear borrador</a>
+            <a href="{{ route('documents.create') }}" class="ft-button-primary shrink-0"><x-ui.icon name="plus" /> Nuevo documento</a>
         @endcan
     </div>
 
@@ -22,12 +22,13 @@
     @endif
 
     @php
+        $documents->getCollection()->loadMissing('recipients.unit');
         $advancedNames = ['document_type', 'origin_unit', 'recipient_unit', 'recipient_user', 'recipient_status', 'creator', 'sender', 'confidentiality', 'sent_from', 'sent_to', 'due_from', 'due_to', 'created_from', 'created_to', 'correction_pending', 'version_min'];
         $hasAdvancedFilters = collect($advancedNames)->contains(fn ($name) => filled($filters[$name] ?? null));
         $hasFilters = collect($filters)->except(['work'])->filter(fn ($value) => filled($value))->isNotEmpty() || $workFilter !== '';
     @endphp
 
-    <form method="GET" action="{{ route('documents.index') }}" class="mt-6 space-y-4 rounded-xl border border-slate-200 bg-white p-4" aria-label="Buscar y filtrar documentos">
+    <form method="GET" action="{{ route('documents.index') }}" class="ft-card mt-6 space-y-4 p-4 sm:p-5" aria-label="Buscar y filtrar documentos">
         @if ($workFilter !== '')
             <input type="hidden" name="work" value="{{ $workFilter }}">
         @endif
@@ -120,7 +121,7 @@
                     <option value="asc" @selected(($filters['direction'] ?? '') === 'asc')>Ascendente</option>
                 </select>
             </label>
-            <button type="submit" class="inline-flex min-h-11 items-center justify-center rounded-lg bg-institutional-700 px-5 py-2.5 text-sm font-bold text-white hover:bg-institutional-900">Buscar</button>
+            <button type="submit" class="ft-button-primary">Buscar</button>
             @if ($hasFilters)
                 <a href="{{ route('documents.index') }}" class="inline-flex min-h-11 items-center justify-center rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50">Limpiar filtros</a>
             @endif
@@ -132,16 +133,15 @@
 
     <p class="mt-4 text-sm font-semibold text-slate-700">{{ $documents->total() }} {{ $documents->total() === 1 ? 'documento encontrado' : 'documentos encontrados' }}</p>
 
-    <section class="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm" aria-labelledby="documents-list-title">
+    <section class="ft-card mt-6 overflow-hidden" aria-labelledby="documents-list-title">
         <h2 id="documents-list-title" class="sr-only">Listado de documentos</h2>
         <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-slate-200">
-                <caption class="sr-only">Asunto, tipo, origen, prioridad, estado y acciones.</caption>
+            <table class="min-w-[58rem] divide-y divide-slate-200 lg:min-w-full">
+                <caption class="sr-only">Código, asunto, tipo, origen, destino, prioridad, estado, fechas y acción para ver.</caption>
                 <thead class="bg-slate-50">
                     <tr>
                         <th scope="col" class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wide text-slate-600">Documento</th>
-                        <th scope="col" class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wide text-slate-600">Origen</th>
-                        <th scope="col" class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wide text-slate-600">Creador</th>
+                        <th scope="col" class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wide text-slate-600">Origen / destino</th>
                         <th scope="col" class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wide text-slate-600">Prioridad</th>
                         <th scope="col" class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wide text-slate-600">Estado</th>
                         <th scope="col" class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wide text-slate-600">Fechas</th>
@@ -152,14 +152,19 @@
                     @forelse ($documents as $document)
                         <tr>
                             <td class="px-5 py-4">
-                                <a href="{{ route('documents.show', $document) }}" class="font-semibold text-blue-800 underline-offset-4 hover:underline">{{ $document->subject }}</a>
-                                <p class="mt-1 text-xs font-semibold text-slate-600">{{ $document->code ?? 'Borrador sin código' }}</p>
+                                <p class="text-xs font-bold text-[var(--ft-secondary)]">{{ $document->code ?? 'Borrador sin código' }}</p>
+                                <a href="{{ route('documents.show', $document) }}" class="mt-1 block max-w-sm break-words font-semibold text-slate-900 underline-offset-4 hover:underline">{{ $document->subject }}</a>
                                 <p class="mt-1 text-xs text-slate-500">{{ $document->documentType->name }}</p>
                             </td>
-                            <td class="px-5 py-4 text-sm text-slate-700">{{ $document->originUnit->name }}</td>
-                            <td class="px-5 py-4 text-sm text-slate-700">{{ $document->creator->name }}</td>
+                            <td class="px-5 py-4 text-sm text-slate-700">
+                                <p><span class="font-semibold">Origen:</span> {{ $document->originUnit->name }}</p>
+                                @php
+                                    $destinationNames = $document->recipients->pluck('unit.name')->filter()->unique();
+                                @endphp
+                                <p class="mt-1 text-xs text-slate-600"><span class="font-semibold">Destino:</span> {{ $destinationNames->take(2)->join(', ') ?: 'Por definir' }}@if($destinationNames->count() > 2) y {{ $destinationNames->count() - 2 }} más @endif</p>
+                            </td>
                             <td class="px-5 py-4 text-sm text-slate-700">{{ $document->priority->label() }}</td>
-                            <td class="px-5 py-4"><span class="inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-800">{{ $document->general_status->label() }}</span></td>
+                            <td class="px-5 py-4"><x-ui.status-badge :status="$document->general_status" /></td>
                             <td class="whitespace-nowrap px-5 py-4 text-xs text-slate-600">
                                 <p>Creado: {{ $document->created_at->format('d/m/Y H:i') }}</p>
                                 <p class="mt-1">Límite: {{ $document->due_at?->timezone(config('app.timezone'))->format('d/m/Y') ?? 'Sin fecha' }}</p>
@@ -169,10 +174,10 @@
                                     <span class="mt-2 inline-flex rounded-full border border-red-300 bg-red-50 px-2.5 py-1 font-bold text-red-900">VENCIDO</span>
                                 @endif
                             </td>
-                            <td class="px-5 py-4 text-right"><a href="{{ route('documents.show', $document) }}" class="inline-flex min-h-10 items-center rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Ver</a></td>
+                            <td class="px-5 py-4 text-right"><a href="{{ route('documents.show', $document) }}" class="ft-button-secondary">Ver</a></td>
                         </tr>
                     @empty
-                        <tr><td colspan="7" class="px-5 py-10 text-center text-sm text-slate-600">No se encontraron documentos con los filtros aplicados dentro de su ámbito.</td></tr>
+                        <tr><td colspan="6" class="px-5 py-10 text-center text-sm text-slate-600"><span class="block font-bold text-slate-800">No se encontraron documentos.</span><span class="mt-1 block">Pruebe con otros filtros o quite la vista de trabajo.</span></td></tr>
                     @endforelse
                 </tbody>
             </table>

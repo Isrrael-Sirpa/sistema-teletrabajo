@@ -31,7 +31,7 @@
 
         <div class="mt-6 flex flex-wrap gap-3">
             @can('update', $user)
-                <a href="{{ route('users.edit', $user) }}" class="inline-flex min-h-11 items-center justify-center rounded-lg bg-institutional-700 px-4 py-2.5 text-sm font-bold text-white hover:bg-institutional-900">Editar usuario</a>
+                <a href="{{ route('users.edit', $user) }}" class="ft-button-primary">Editar usuario</a>
             @endcan
             @can('resetPassword', $user)
                 <a href="{{ route('users.password.edit', $user) }}" class="inline-flex min-h-11 items-center justify-center rounded-lg border border-blue-300 px-4 py-2.5 text-sm font-semibold text-blue-800 hover:bg-blue-50">Restablecer contraseña</a>

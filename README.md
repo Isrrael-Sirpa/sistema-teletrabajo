@@ -81,13 +81,21 @@ Consulte [la documentación de la Fase 4](docs/FASE_4_ROLES_PERMISOS.md) y [la m
 
 ## Estructura organizacional
 
-La Facultad de Tecnología y su Kardex institucional se crean mediante un seeder idempotente. Las carreras se administran dinámicamente desde `/administracion/unidades`; pueden activarse y desactivarse sin eliminación física. No se cargaron nombres temporales de carreras porque aún no fueron confirmados institucionalmente.
+La Facultad de Tecnología, su Kardex y las nueve carreras confirmadas se crean mediante `InstitutionalStructureSeeder`, incluido en `DatabaseSeeder`. Sus nombres y siglas iniciales se encuentran en `config/institutional_careers.php`; ejecutar el seeder de nuevo no duplica carreras ni sobrescribe una sigla o un estado modificados posteriormente por el Administrador. Las carreras se administran desde `/administracion/unidades`, donde la sigla puede editarse; el cambio solo afecta códigos de documentos enviados después. Los códigos históricos almacenados en `documents.code` no se recalculan.
 
 Consulte [la documentación de la Fase 5](docs/FASE_5_CARRERAS_KARDEX.md).
 
 ## Gestión de usuarios
 
 La administración se encuentra en `/administracion/usuarios`. Administrador y Co-administrador trabajan con ámbito global; el Jefe de Carrera solo puede gestionar Secretaria, Auxiliar y Extra de su propia carrera. Las cuentas se activan o desactivan sin eliminación física y el restablecimiento de contraseña es una acción separada.
+
+Para pruebas locales/UAT, después de cargar la estructura institucional y crear el Administrador, se pueden crear nueve Jefes y nueve Secretarias ficticios mediante:
+
+```bash
+php artisan app:create-demo-uat-users --generate-password
+```
+
+La primera ejecución genera una contraseña aleatoria que se guarda únicamente como `DEMO_USER_INITIAL_PASSWORD` en el `.env` local ignorado por Git. El comando no la imprime; puede consultarse directamente en ese archivo privado si se necesita iniciar sesión con las cuentas de demostración. También puede establecerse esa variable localmente antes de ejecutar el comando sin la opción. Se aplica la política institucional de contraseñas. El comando rechaza producción, utiliza correos `@example.test`, es idempotente y no forma parte de `DatabaseSeeder`. No incluya el `.env` en el repositorio ni use estas cuentas en producción.
 
 Consulte [la documentación de la Fase 6](docs/FASE_6_GESTION_USUARIOS.md).
 
@@ -337,6 +345,7 @@ composer audit
 - [Fase 22: anulación documental](docs/FASE_22_ANULACION_DOCUMENTAL.md)
 - [Fase 23: producción y seguridad](docs/FASE_23_PRODUCCION_SEGURIDAD.md)
 - [Fase 24: cierre técnico](docs/FASE_24_CIERRE_TECNICO.md)
+- [Rediseño visual y experiencia de usuario](docs/REDISENO_VISUAL.md)
 - [Matriz de pruebas de aceptación](docs/PRUEBAS_ACEPTACION.md)
 - [Checklist de entrega](docs/CHECKLIST_ENTREGA.md)
 - [Mejoras futuras](docs/MEJORAS_FUTURAS.md)

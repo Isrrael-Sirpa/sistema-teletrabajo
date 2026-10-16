@@ -1,85 +1,50 @@
 <x-layouts.app :title="'Iniciar sesión — '.config('app.name')">
-    <main id="contenido-principal" class="relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-10 sm:px-6">
-        <div aria-hidden="true" class="absolute inset-x-0 top-0 h-72 bg-institutional-900"></div>
+    <main id="contenido-principal" class="grid min-h-screen bg-[var(--ft-background)] lg:grid-cols-[minmax(22rem,44%)_1fr]">
+        <section class="relative flex flex-col justify-between overflow-hidden bg-[var(--ft-primary)] px-6 py-6 text-white sm:px-10 sm:py-8 lg:min-h-screen lg:px-14 lg:py-12" aria-label="Identidad institucional">
+            <div class="relative z-10">
+                <div class="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-white/25 bg-white/10 sm:h-14 sm:w-14" aria-hidden="true"><x-ui.icon name="documents" class="h-6 w-6 sm:h-8 sm:w-8" /></div>
+                <p class="mt-4 text-[.7rem] font-bold uppercase tracking-[.16em] text-blue-200 sm:mt-7 sm:text-xs sm:tracking-[.2em]">Universidad Mayor de San Andrés</p>
+                <p class="mt-1 text-xl font-bold tracking-tight sm:mt-2 sm:text-3xl">Facultad de Tecnología</p>
+                <div class="mt-4 h-1 w-12 rounded-full bg-[var(--ft-light-blue)] sm:mt-7" aria-hidden="true"></div>
+                <h1 class="mt-4 max-w-lg text-2xl font-bold leading-tight tracking-tight sm:mt-7 sm:text-4xl">Sistema de Gestión Documental</h1>
+                <p class="mt-4 hidden max-w-md text-sm leading-7 text-blue-100 sm:block sm:text-base">Un espacio claro y seguro para gestionar el trabajo documental de nuestra Facultad.</p>
+            </div>
+            <p class="relative z-10 mt-12 hidden text-sm text-blue-200 lg:block">Facultad de Tecnología · UMSA</p>
+            <div class="pointer-events-none absolute -bottom-28 -right-28 h-80 w-80 rounded-full border-[44px] border-white/5" aria-hidden="true"></div>
+        </section>
 
-        <section class="relative w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-900/15" aria-labelledby="login-title">
-            <header class="bg-institutional-900 px-6 pb-8 pt-7 text-center text-white sm:px-9">
-                <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-white/10 ring-1 ring-white/25" aria-hidden="true">
-                    <svg class="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 3.75h9a2.25 2.25 0 0 1 2.25 2.25v12A2.25 2.25 0 0 1 16.5 20.25h-9A2.25 2.25 0 0 1 5.25 18V6A2.25 2.25 0 0 1 7.5 3.75Z" />
-                        <path stroke-linecap="round" d="M8.5 8.25h7M8.5 12h7M8.5 15.75h4" />
-                    </svg>
-                </div>
-                <p class="mt-4 text-xs font-semibold uppercase tracking-[0.14em] text-blue-100">
-                    {{ config('institution.university') }}
-                </p>
-                <p class="mt-1 text-sm text-blue-100">{{ config('institution.faculty') }}</p>
-            </header>
-
-            <div class="px-6 py-8 sm:px-9">
-                <h1 id="login-title" class="text-2xl font-bold tracking-tight text-slate-950">Iniciar sesión</h1>
-                <p class="mt-2 text-sm leading-6 text-slate-600">
-                    Ingrese con su correo institucional para acceder al sistema.
-                </p>
+        <section class="flex items-center justify-center px-4 py-6 sm:px-8 sm:py-10 lg:py-16" aria-labelledby="login-title">
+            <div class="w-full max-w-md rounded-2xl border border-[var(--ft-border)] bg-white p-6 shadow-sm sm:p-10">
+                <p class="ft-section-heading">Acceso al sistema</p>
+                <h2 id="login-title" class="mt-2 text-2xl font-bold tracking-tight text-[var(--ft-primary)] sm:text-3xl">Iniciar sesión</h2>
+                <p class="mt-3 text-sm leading-6 text-slate-600">Ingrese con el correo y la contraseña de su cuenta institucional.</p>
 
                 @if (session('status'))
-                    <div role="status" class="mt-5 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-                        {{ session('status') }}
-                    </div>
+                    <div role="status" class="mt-6 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">{{ session('status') }}</div>
                 @endif
 
                 @if ($errors->any())
-                    <div role="alert" aria-live="polite" class="mt-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
-                        <p class="font-semibold">No fue posible iniciar sesión.</p>
-                        <ul class="mt-1 list-disc space-y-1 pl-5">
-                            @foreach ($errors->all() as $error)
-                                <li>{{ $error }}</li>
-                            @endforeach
-                        </ul>
+                    <div role="alert" aria-live="polite" class="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
+                        <p class="font-bold">No fue posible iniciar sesión.</p>
+                        <ul class="mt-1 list-disc space-y-1 pl-5">@foreach ($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul>
                     </div>
                 @endif
 
-                <form method="POST" action="{{ route('login.store') }}" class="mt-6 space-y-5">
+                <form method="POST" action="{{ route('login.store') }}" class="mt-7 space-y-5">
                     @csrf
-
                     <div>
-                        <label for="email" class="block text-sm font-semibold text-slate-800">Correo electrónico</label>
-                        <input
-                            id="email"
-                            name="email"
-                            type="email"
-                            value="{{ old('email') }}"
-                            required
-                            autofocus
-                            autocomplete="username"
-                            inputmode="email"
-                            aria-describedby="email-help"
-                            class="mt-2 block min-h-12 w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-base text-slate-950 shadow-sm transition placeholder:text-slate-400 focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20"
-                            placeholder="nombre@institucion.edu.bo"
-                        >
+                        <label for="email" class="block text-sm font-bold text-slate-800">Correo electrónico</label>
+                        <input id="email" name="email" type="email" value="{{ old('email') }}" required autofocus autocomplete="username" inputmode="email" aria-describedby="email-help" class="mt-2 block w-full text-base" placeholder="nombre@institucion.edu.bo">
                         <p id="email-help" class="mt-1.5 text-xs leading-5 text-slate-500">Use el correo asignado por la institución.</p>
                     </div>
-
                     <div>
-                        <label for="password" class="block text-sm font-semibold text-slate-800">Contraseña</label>
-                        <input
-                            id="password"
-                            name="password"
-                            type="password"
-                            required
-                            autocomplete="current-password"
-                            class="mt-2 block min-h-12 w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-base text-slate-950 shadow-sm transition focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20"
-                        >
+                        <label for="password" class="block text-sm font-bold text-slate-800">Contraseña</label>
+                        <input id="password" name="password" type="password" required autocomplete="current-password" class="mt-2 block w-full text-base">
                     </div>
-
-                    <button type="submit" class="flex min-h-12 w-full items-center justify-center rounded-lg bg-institutional-700 px-4 py-3 text-base font-bold text-white shadow-sm transition hover:bg-institutional-900 focus-visible:outline-offset-2">
-                        Ingresar al sistema
-                    </button>
+                    <button type="submit" class="ft-button-primary w-full text-base">Ingresar al sistema <x-ui.icon name="arrow" class="h-4 w-4" /></button>
                 </form>
 
-                <p class="mt-6 border-t border-slate-200 pt-5 text-center text-xs leading-5 text-slate-500">
-                    Si no puede ingresar, comuníquese con el responsable del sistema de su unidad.
-                </p>
+                <p class="mt-7 border-t border-[var(--ft-border)] pt-5 text-sm leading-6 text-slate-600">¿Tiene dificultades para ingresar? Comuníquese con el responsable del sistema de su unidad.</p>
             </div>
         </section>
     </main>

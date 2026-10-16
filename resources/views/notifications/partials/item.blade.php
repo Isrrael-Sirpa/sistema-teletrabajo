@@ -10,20 +10,20 @@
 @endphp
 
 <article @class([
-    'rounded-xl border p-4',
-    'border-blue-200 bg-blue-50/60' => $unread,
+    'rounded-xl border p-4 sm:p-5',
+    'border-l-4 border-l-[var(--career-primary)] border-[var(--ft-border)] bg-[var(--career-background)]' => $unread,
     'border-slate-200 bg-white' => ! $unread,
 ])>
     <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div class="min-w-0">
-            <h3 class="font-bold text-slate-950">{{ data_get($notification->data, 'title', 'Notificación documental') }}</h3>
+            <div class="flex flex-wrap items-center gap-2">@if($unread)<span class="ft-badge bg-blue-100 text-blue-900">Nueva</span>@endif<h3 class="font-bold text-slate-950">{{ data_get($notification->data, 'title', 'Notificación documental') }}</h3></div>
             <p class="mt-1 text-sm leading-6 text-slate-700">{{ data_get($notification->data, 'message', 'Existe una actualización documental.') }}</p>
             <time datetime="{{ $occurredAt->toIso8601String() }}" class="mt-2 block text-xs font-semibold text-slate-500">{{ $occurredAt->format('d/m/Y H:i:s') }}</time>
         </div>
 
         <div class="flex shrink-0 flex-wrap gap-2">
             @if ($documentUrl)
-                <a href="{{ $documentUrl }}" class="inline-flex min-h-10 items-center rounded-lg bg-institutional-700 px-3 py-2 text-sm font-bold text-white hover:bg-institutional-900">Abrir documento</a>
+                <a href="{{ $documentUrl }}" class="ft-button-primary">Abrir documento</a>
             @endif
             @if ($unread)
                 <form method="POST" action="{{ route('notifications.read', $notification->id) }}">

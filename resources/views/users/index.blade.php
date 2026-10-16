@@ -6,7 +6,7 @@
             <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600">Consulte y administre las cuentas que se encuentran dentro de su ámbito autorizado.</p>
         </div>
         @can('create', App\Models\User::class)
-            <a href="{{ route('users.create') }}" class="inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg bg-institutional-700 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-institutional-900">Crear usuario</a>
+            <a href="{{ route('users.create') }}" class="ft-button-primary shrink-0"><x-ui.icon name="plus" /> Crear usuario</a>
         @endcan
     </div>
 
@@ -52,7 +52,7 @@
         </div>
         <div class="mt-4 flex flex-wrap justify-end gap-2">
             <a href="{{ route('users.index') }}" class="inline-flex min-h-10 items-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Limpiar filtros</a>
-            <button type="submit" class="min-h-10 rounded-lg bg-institutional-700 px-4 py-2 text-sm font-bold text-white hover:bg-institutional-900">Aplicar filtros</button>
+            <button type="submit" class="ft-button-primary">Aplicar filtros</button>
         </div>
     </form>
 
@@ -80,18 +80,14 @@
                             <td class="px-5 py-4 text-sm text-slate-700">{{ $user->roleName()?->label() ?? 'Sin rol' }}</td>
                             <td class="px-5 py-4 text-sm text-slate-700">{{ $user->organizationalUnit?->name ?? 'Ámbito global' }}</td>
                             <td class="px-5 py-4">
-                                <span @class([
-                                    'inline-flex rounded-full px-2.5 py-1 text-xs font-bold',
-                                    'bg-emerald-50 text-emerald-800' => $user->status === App\Enums\UserStatus::ACTIVE,
-                                    'bg-slate-200 text-slate-700' => $user->status === App\Enums\UserStatus::INACTIVE,
-                                ])>{{ $user->status->label() }}</span>
+                                <x-ui.status-badge :status="$user->status" />
                             </td>
                             <td class="px-5 py-4 text-right">
                                 <a href="{{ route('users.show', $user) }}" class="inline-flex min-h-10 items-center rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Ver</a>
                             </td>
                         </tr>
                     @empty
-                        <tr><td colspan="5" class="px-5 py-10 text-center text-sm text-slate-600">No se encontraron usuarios con los filtros seleccionados.</td></tr>
+                        <tr><td colspan="5" class="px-5 py-10 text-center text-sm text-slate-600"><span class="block font-bold text-slate-800">No se encontraron usuarios.</span><span class="mt-1 block">Pruebe con otro nombre, rol o estado.</span></td></tr>
                     @endforelse
                 </tbody>
             </table>

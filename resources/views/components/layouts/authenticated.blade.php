@@ -1,112 +1,105 @@
-@props(['title' => null, 'unreadNotificationCount' => null])
+@props(['title' => null, 'unreadNotificationCount' => null, 'careerUnit' => null])
+
+@php
+    $viewer = auth()->user();
+    $role = $viewer->roleName();
+    $activeCareer = $careerUnit ?? ($role?->requiresCareer() ? $viewer->organizationalUnit : null);
+    $navigationUnreadCount = $unreadNotificationCount ?? $viewer->unreadNotifications()->count();
+    $moduleTitle = $title ? str($title)->before(' — ')->toString() : 'Inicio';
+@endphp
 
 <x-layouts.app :title="$title ?? config('app.name')">
-    <div class="min-h-screen bg-slate-100">
-        <header class="border-b border-blue-950 bg-institutional-900 text-white">
-            <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-                <div class="flex flex-wrap items-center justify-between gap-4 py-4">
-                    <a href="{{ route('dashboard') }}" class="rounded-sm">
-                        <p class="text-xs font-semibold uppercase tracking-wider text-blue-200">{{ config('institution.faculty') }}</p>
-                        <p class="mt-1 font-bold">Sistema de Gestión Documental</p>
-                    </a>
+    <div class="ft-workspace" data-career="{{ $activeCareer?->acronym ?? '' }}">
+        <div class="fixed inset-0 z-40 hidden bg-slate-950/50 lg:hidden" data-sidebar-overlay></div>
 
-                    <div class="flex items-center gap-3">
-                        <span class="hidden text-sm text-blue-100 sm:inline">{{ auth()->user()->name }}</span>
-                        <form method="POST" action="{{ route('logout') }}">
-                            @csrf
-                            <button type="submit" class="min-h-11 rounded-lg border border-white/30 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/10">
-                                Cerrar sesión
-                            </button>
-                        </form>
+        <aside id="navegacion-principal" class="ft-sidebar fixed inset-y-0 left-0 z-50 flex -translate-x-full flex-col transition-transform duration-200 lg:translate-x-0" aria-label="Navegación principal" data-sidebar>
+            <div class="ft-sidebar-brand flex min-h-24 items-center justify-between gap-3 px-5 py-5">
+                <a href="{{ route('dashboard') }}" class="min-w-0 rounded-md text-white">
+                    <span class="block text-[.68rem] font-bold uppercase tracking-[.16em] text-blue-200">UMSA · Facultad de Tecnología</span>
+                    <span class="mt-1 block text-base font-bold leading-tight">Gestión Documental</span>
+                </a>
+                <button type="button" class="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-white hover:bg-white/15 lg:hidden" aria-label="Cerrar menú" data-sidebar-close>
+                    <x-ui.icon name="close" />
+                </button>
+            </div>
+
+            <nav class="flex-1 overflow-y-auto px-3 pb-6" aria-label="Secciones del sistema">
+                <p class="ft-nav-label">INICIO</p>
+                <x-ui.nav-link :href="route('dashboard')" icon="home" :active="request()->routeIs('dashboard')">Inicio</x-ui.nav-link>
+
+                @can('viewAny', App\Models\Document::class)
+                    <p class="ft-nav-label">DOCUMENTOS</p>
+                    <x-ui.nav-link :href="route('documents.index')" icon="documents" :active="request()->routeIs('documents.*') && ! request()->routeIs('documents.create')">Documentos</x-ui.nav-link>
+                    @can('create', App\Models\Document::class)
+                        <x-ui.nav-link :href="route('documents.create')" icon="plus" :active="request()->routeIs('documents.create')">Nuevo documento</x-ui.nav-link>
+                    @endcan
+                @else
+                    <p class="ft-nav-label">AVISOS</p>
+                @endcan
+                <x-ui.nav-link :href="route('notifications.index')" icon="bell" :active="request()->routeIs('notifications.*')">Notificaciones @if($navigationUnreadCount > 0)<span class="ml-auto rounded-full bg-white/20 px-2 py-0.5 text-xs">{{ $navigationUnreadCount > 99 ? '99+' : $navigationUnreadCount }}</span>@endif</x-ui.nav-link>
+
+                @if($viewer->can('users.view') || $viewer->can('units.view') || $viewer->can('document_types.view') || $viewer->canAny(['delegations.manage_global', 'delegations.manage_unit']))
+                    <p class="ft-nav-label">GESTIÓN</p>
+                    @can('users.view')<x-ui.nav-link :href="route('users.index')" icon="users" :active="request()->routeIs('users.*')">Usuarios</x-ui.nav-link>@endcan
+                    @can('units.view')<x-ui.nav-link :href="route('units.index')" icon="building" :active="request()->routeIs('units.*')">Carreras y unidades</x-ui.nav-link>@endcan
+                    @can('document_types.view')<x-ui.nav-link :href="route('document-types.index')" icon="list" :active="request()->routeIs('document-types.*')">Tipos documentales</x-ui.nav-link>@endcan
+                    @canany(['delegations.manage_global', 'delegations.manage_unit'])<x-ui.nav-link :href="route('delegations.index')" icon="calendar" :active="request()->routeIs('delegations.*')">Delegaciones</x-ui.nav-link>@endcanany
+                @endif
+
+                @if($viewer->canAny(['reports.view_global', 'reports.view_unit']) || $viewer->can('audit.view'))
+                    <p class="ft-nav-label">ANÁLISIS</p>
+                    @canany(['reports.view_global', 'reports.view_unit'])<x-ui.nav-link :href="route('reports.documents.index')" icon="chart" :active="request()->routeIs('reports.*')">Reportes</x-ui.nav-link>@endcanany
+                    @can('audit.view')<x-ui.nav-link :href="route('audit.index')" icon="shield" :active="request()->routeIs('audit.*')">Auditoría</x-ui.nav-link>@endcan
+                @endif
+            </nav>
+
+            <div class="border-t border-white/15 px-5 py-4 text-xs leading-5 text-blue-100">
+                <span class="block font-semibold text-white">Facultad de Tecnología</span>
+                Universidad Mayor de San Andrés
+            </div>
+        </aside>
+
+        <div class="min-w-0 lg:pl-[16.75rem]">
+            <header class="ft-header sticky top-0 z-30 flex items-center justify-between gap-3 px-4 sm:px-7">
+                <div class="flex min-w-0 items-center gap-3">
+                    <button type="button" class="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-slate-200 text-slate-800 hover:bg-slate-50 lg:hidden" aria-controls="navegacion-principal" aria-expanded="false" aria-label="Abrir menú" data-sidebar-open>
+                        <x-ui.icon name="menu" />
+                    </button>
+                    <div class="min-w-0">
+                        <p class="truncate text-sm font-bold text-slate-900 sm:text-base">{{ $moduleTitle }}</p>
+                        @if($activeCareer)
+                            <p class="mt-0.5 flex items-center gap-1.5 truncate text-xs text-slate-600"><span class="ft-career-dot" aria-hidden="true"></span> Carrera de {{ $activeCareer->name }}</p>
+                        @else
+                            <p class="mt-0.5 hidden text-xs text-slate-500 sm:block">Facultad de Tecnología · UMSA</p>
+                        @endif
                     </div>
                 </div>
 
-                <nav aria-label="Navegación principal" class="flex gap-1 overflow-x-auto pb-3">
-                    <a href="{{ route('dashboard') }}" @class([
-                        'min-h-10 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold transition',
-                        'bg-white text-blue-950' => request()->routeIs('dashboard'),
-                        'text-blue-100 hover:bg-white/10 hover:text-white' => ! request()->routeIs('dashboard'),
-                    ])>
-                        Inicio
+                <div class="flex shrink-0 items-center gap-2 sm:gap-4">
+                    <a href="{{ route('notifications.index') }}" class="relative inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-slate-700 hover:bg-slate-100" aria-label="Notificaciones: {{ $navigationUnreadCount }} sin leer">
+                        <x-ui.icon name="bell" />
+                        @if($navigationUnreadCount > 0)<span class="absolute -right-0.5 -top-0.5 rounded-full bg-red-700 px-1.5 py-0.5 text-[.65rem] font-bold text-white">{{ $navigationUnreadCount > 99 ? '99+' : $navigationUnreadCount }}</span>@endif
                     </a>
-                    @php($navigationUnreadCount = $unreadNotificationCount ?? auth()->user()->unreadNotifications()->count())
-                    <a href="{{ route('notifications.index') }}" @class([
-                        'min-h-10 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold transition',
-                        'bg-white text-blue-950' => request()->routeIs('notifications.*'),
-                        'text-blue-100 hover:bg-white/10 hover:text-white' => ! request()->routeIs('notifications.*'),
-                    ]) aria-label="Notificaciones: {{ $navigationUnreadCount }} sin leer">
-                        Notificaciones ({{ $navigationUnreadCount > 99 ? '99+' : $navigationUnreadCount }})
-                        @if ($navigationUnreadCount > 0)
-                            <span class="sr-only">pendientes</span>
-                        @endif
-                    </a>
-                    @can('viewAny', App\Models\Document::class)
-                        <a href="{{ route('documents.index') }}" @class([
-                            'min-h-10 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold transition',
-                            'bg-white text-blue-950' => request()->routeIs('documents.*'),
-                            'text-blue-100 hover:bg-white/10 hover:text-white' => ! request()->routeIs('documents.*'),
-                        ])>
-                            Documentos
-                        </a>
-                    @endcan
-                    @can('units.view')
-                        <a href="{{ route('units.index') }}" @class([
-                            'min-h-10 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold transition',
-                            'bg-white text-blue-950' => request()->routeIs('units.*'),
-                            'text-blue-100 hover:bg-white/10 hover:text-white' => ! request()->routeIs('units.*'),
-                        ])>
-                            Carreras y unidades
-                        </a>
-                    @endcan
-                    @can('users.view')
-                        <a href="{{ route('users.index') }}" @class([
-                            'min-h-10 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold transition',
-                            'bg-white text-blue-950' => request()->routeIs('users.*'),
-                            'text-blue-100 hover:bg-white/10 hover:text-white' => ! request()->routeIs('users.*'),
-                        ])>
-                            Usuarios
-                        </a>
-                    @endcan
-                    @can('document_types.view')
-                        <a href="{{ route('document-types.index') }}" @class([
-                            'min-h-10 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold transition',
-                            'bg-white text-blue-950' => request()->routeIs('document-types.*'),
-                            'text-blue-100 hover:bg-white/10 hover:text-white' => ! request()->routeIs('document-types.*'),
-                        ])>
-                            Tipos documentales
-                        </a>
-                    @endcan
-                    @can('audit.view')
-                        <a href="{{ route('audit.index') }}" @class([
-                            'min-h-10 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold transition',
-                            'bg-white text-blue-950' => request()->routeIs('audit.*'),
-                            'text-blue-100 hover:bg-white/10 hover:text-white' => ! request()->routeIs('audit.*'),
-                        ])>
-                            Auditoría
-                        </a>
-                    @endcan
-                    @canany(['reports.view_global', 'reports.view_unit'])
-                        <a href="{{ route('reports.documents.index') }}" @class([
-                            'min-h-10 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold transition',
-                            'bg-white text-blue-950' => request()->routeIs('reports.*'),
-                            'text-blue-100 hover:bg-white/10 hover:text-white' => ! request()->routeIs('reports.*'),
-                        ])>
-                            Reportes
-                        </a>
-                    @endcanany
-                    @canany(['delegations.manage_global', 'delegations.manage_unit'])
-                        <a href="{{ route('delegations.index') }}" @class([
-                            'min-h-10 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold transition',
-                            'bg-white text-blue-950' => request()->routeIs('delegations.*'),
-                            'text-blue-100 hover:bg-white/10 hover:text-white' => ! request()->routeIs('delegations.*'),
-                        ])>Delegaciones</a>
-                    @endcanany
-                </nav>
-            </div>
-        </header>
+                    <details class="relative" data-profile-menu>
+                        <summary class="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg px-1.5 hover:bg-slate-100 sm:gap-3">
+                            <span class="grid h-9 w-9 place-items-center rounded-full bg-institutional-100 text-sm font-bold text-institutional-900" aria-hidden="true">{{ mb_strtoupper(mb_substr($viewer->name, 0, 1)) }}</span>
+                            <span class="hidden max-w-36 text-left sm:block"><span class="block truncate text-xs font-bold text-slate-900">{{ $viewer->name }}</span><span class="block truncate text-xs text-slate-600">{{ $role?->label() ?? 'Usuario' }}</span></span>
+                            <span class="sr-only">Menú de {{ $viewer->name }}</span>
+                        </summary>
+                        <div class="absolute right-0 z-50 mt-2 w-64 rounded-xl border border-slate-200 bg-white p-3 shadow-xl">
+                            <p class="break-words px-2 text-sm font-bold text-slate-900">{{ $viewer->name }}</p>
+                            <p class="px-2 text-xs text-slate-600">{{ $role?->label() ?? 'Usuario' }}</p>
+                            <p class="mt-1 break-all px-2 text-xs text-slate-500">{{ $viewer->email }}</p>
+                            <form method="POST" action="{{ route('logout') }}" class="mt-3 border-t border-slate-200 pt-3">
+                                @csrf
+                                <button type="submit" class="ft-button-secondary w-full">Cerrar sesión</button>
+                            </form>
+                        </div>
+                    </details>
+                </div>
+            </header>
 
-        <main id="contenido-principal" class="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-            {{ $slot }}
-        </main>
+            <main id="contenido-principal" class="ft-page">{{ $slot }}</main>
+        </div>
     </div>
 </x-layouts.app>

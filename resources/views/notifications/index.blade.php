@@ -32,7 +32,7 @@
             @forelse ($unreadNotifications as $notification)
                 @include('notifications.partials.item', ['notification' => $notification, 'unread' => true])
             @empty
-                <p class="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center text-sm text-slate-600">No tiene notificaciones pendientes.</p>
+                <p class="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-600"><span class="block font-bold text-slate-800">Está al día.</span><span class="mt-1 block">No tiene notificaciones nuevas.</span></p>
             @endforelse
         </div>
 

@@ -71,6 +71,32 @@ class DocumentWorkflowTest extends TestCase
         $this->assertDatabaseCount('notifications', 0);
     }
 
+    public function test_changing_a_career_acronym_keeps_sent_codes_and_only_affects_future_documents(): void
+    {
+        [$historical, $origin, $creator] = $this->draftContext();
+        $this->recipient($historical, $origin);
+        $this->send($creator, $historical)->assertRedirect();
+        $oldCode = $historical->fresh()->code;
+        $oldAcronym = $origin->acronym;
+
+        $administrator = $this->userWithRole(RoleName::ADMINISTRATOR);
+        $this->actingAs($administrator)->put(route('units.update', $origin), [
+            'name' => $origin->name,
+            'acronym' => 'NUEVA-SIGLA',
+            'description' => null,
+        ])->assertRedirect(route('units.show', $origin));
+
+        $this->assertSame($oldCode, $historical->fresh()->code);
+        $this->assertStringContainsString('-'.$oldAcronym.'-', $oldCode);
+
+        $future = $this->draft($creator, $origin->fresh());
+        $this->recipient($future, $origin);
+        $this->send($creator, $future)->assertRedirect();
+
+        $this->assertSame($oldCode, $historical->fresh()->code);
+        $this->assertMatchesRegularExpression('/^FTEC-NUEVA-SIGLA-'.now()->year.'-000002$/', $future->fresh()->code);
+    }
+
     public function test_draft_without_recipient_cannot_be_sent_or_consume_counter(): void
     {
         [$document, , $creator] = $this->draftContext();

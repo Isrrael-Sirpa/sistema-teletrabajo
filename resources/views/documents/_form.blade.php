@@ -86,5 +86,5 @@
 
 <div class="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
     <a href="{{ $editing ? route('documents.show', $document) : route('documents.index') }}" class="inline-flex min-h-11 items-center justify-center rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50">Cancelar</a>
-    <button type="submit" class="inline-flex min-h-11 items-center justify-center rounded-lg bg-institutional-700 px-5 py-2.5 text-sm font-bold text-white hover:bg-institutional-900">{{ $editing ? 'Guardar cambios' : 'Guardar borrador' }}</button>
+    <button type="submit" class="ft-button-primary">{{ $editing ? 'Guardar cambios' : 'Guardar borrador' }}</button>
 </div>

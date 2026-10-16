@@ -1,4 +1,4 @@
-<x-layouts.authenticated :title="$unit->name">
+<x-layouts.authenticated :title="$unit->name" :career-unit="$unit->type === App\Enums\OrganizationalUnitType::CAREER ? $unit : null">
     <div class="mx-auto max-w-4xl">
         <a href="{{ route('units.index') }}" class="text-sm font-semibold text-blue-800 underline-offset-4 hover:underline">← Volver al listado</a>
 
@@ -13,7 +13,7 @@
                 <div>
                     <p class="text-sm font-semibold text-blue-700">{{ $unit->type->label() }}</p>
                     <h1 id="unit-title" class="mt-1 text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">{{ $unit->name }}</h1>
-                    <p class="mt-2 text-sm font-medium text-slate-600">{{ $unit->acronym }}</p>
+                    <p class="mt-2 flex items-center gap-2 text-sm font-medium text-slate-600"><span class="ft-career-dot" aria-hidden="true"></span> Sigla: {{ $unit->acronym }}</p>
                 </div>
                 <span @class([
                     'inline-flex w-fit rounded-full px-3 py-1 text-sm font-bold',
@@ -27,10 +27,6 @@
                     <dt class="text-sm font-semibold text-slate-700">Unidad padre</dt>
                     <dd class="mt-1 text-sm text-slate-600">{{ $unit->parent?->name ?? 'Unidad raíz institucional' }}</dd>
                 </div>
-                <div>
-                    <dt class="text-sm font-semibold text-slate-700">Identificador público</dt>
-                    <dd class="mt-1 break-all font-mono text-xs text-slate-600">{{ $unit->public_id }}</dd>
-                </div>
                 <div class="sm:col-span-2">
                     <dt class="text-sm font-semibold text-slate-700">Descripción</dt>
                     <dd class="mt-1 whitespace-pre-line text-sm leading-6 text-slate-600">{{ $unit->description ?: 'Sin descripción registrada.' }}</dd>
@@ -40,7 +36,7 @@
             @if ($unit->type === App\Enums\OrganizationalUnitType::CAREER)
                 <div class="mt-7 flex flex-wrap gap-3 border-t border-slate-200 pt-6">
                     @can('update', $unit)
-                        <a href="{{ route('units.edit', $unit) }}" class="inline-flex min-h-11 items-center rounded-lg bg-institutional-700 px-4 py-2.5 text-sm font-bold text-white hover:bg-institutional-900">Editar carrera</a>
+                        <a href="{{ route('units.edit', $unit) }}" class="ft-button-primary">Editar carrera</a>
                     @endcan
                     @can('deactivate', $unit)
                         <form method="POST" action="{{ route('units.deactivate', $unit) }}" onsubmit="return confirm('¿Está seguro de desactivar esta carrera? Esta acción no elimina su historial.')">

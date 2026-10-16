@@ -1,14 +1,11 @@
-<x-layouts.authenticated :title="$document->subject">
+<x-layouts.authenticated :title="$document->subject" :career-unit="$document->originUnit->type === App\Enums\OrganizationalUnitType::CAREER ? $document->originUnit : null">
     <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-            <p class="text-sm font-semibold text-blue-700">Documento</p>
+            <p class="ft-section-heading">{{ $document->code ?? 'Borrador sin código' }}</p>
             <h1 class="mt-1 max-w-4xl text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">{{ $document->subject }}</h1>
             <div class="mt-3 flex flex-wrap gap-2">
-                <span @class([
-                    'inline-flex rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide',
-                    'bg-red-700 text-white' => $document->general_status === App\Enums\DocumentStatus::ANNULLED,
-                    'bg-amber-50 text-amber-800' => $document->general_status !== App\Enums\DocumentStatus::ANNULLED,
-                ])>{{ $document->general_status->label() }}</span>
+                <x-ui.status-badge :status="$document->general_status" />
+                <span class="ft-badge bg-slate-100 text-slate-700">Prioridad: {{ $document->priority->label() }}</span>
                 @if ($document->confidentiality === App\Enums\DocumentConfidentiality::RESTRICTED)
                     <span class="inline-flex rounded-full bg-red-50 px-3 py-1 text-xs font-bold text-red-800">Acceso restringido</span>
                 @endif
@@ -18,10 +15,11 @@
                     <span class="inline-flex rounded-full border border-red-300 bg-red-50 px-3 py-1 text-xs font-bold text-red-900">VENCIDO</span>
                 @endif
             </div>
+            <p class="mt-3 text-sm text-slate-600">{{ $document->documentType->name }} · Origen: {{ $document->originUnit->name }} · Creado el {{ $document->created_at->format('d/m/Y') }} · Límite: {{ $document->due_at?->timezone(config('app.timezone'))->format('d/m/Y') ?? 'sin fecha' }}</p>
         </div>
         <div class="flex flex-wrap gap-2">
             @can('update', $document)
-                <a href="{{ route('documents.edit', $document) }}" class="inline-flex min-h-11 items-center justify-center rounded-lg bg-institutional-700 px-4 py-2.5 text-sm font-bold text-white hover:bg-institutional-900">Editar borrador</a>
+                <a href="{{ route('documents.edit', $document) }}" class="ft-button-primary">Editar borrador</a>
             @endcan
             <a href="{{ route('documents.index') }}" class="inline-flex min-h-11 items-center justify-center rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50">Volver</a>
         </div>
@@ -33,6 +31,17 @@
     @if ($errors->any())
         <div role="alert" class="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">{{ $errors->first() }}</div>
     @endif
+
+    <x-ui.document-stepper :status="$document->general_status" />
+
+    <nav class="mt-5 flex gap-2 overflow-x-auto pb-2" aria-label="Secciones del documento">
+        <a href="#document-data-title" class="ft-button-secondary shrink-0">Información</a>
+        <a href="#recipients-title" class="ft-button-secondary shrink-0">Destinatarios</a>
+        <a href="#files-title" class="ft-button-secondary shrink-0">Archivos</a>
+        <a href="#history-title" class="ft-button-secondary shrink-0">Historial</a>
+        @if ($canManageAccessGrants)<a href="#access-grants-title" class="ft-button-secondary shrink-0">Accesos</a>@endif
+        @can('send', $document)<a href="#send-title" class="ft-button-primary shrink-0">Enviar</a>@endcan
+    </nav>
 
     @if ($document->general_status === App\Enums\DocumentStatus::ANNULLED)
         <section class="mt-6 rounded-2xl border-2 border-red-700 bg-red-50 p-5 shadow-sm sm:p-7" aria-labelledby="annulled-title">
@@ -172,7 +181,7 @@
                                             @method('PATCH')
                                             <input type="hidden" name="document_lock_version" value="{{ $document->lock_version }}">
                                             <input type="hidden" name="recipient_lock_version" value="{{ $recipient->lock_version }}">
-                                            <button type="submit" class="inline-flex min-h-10 items-center rounded-lg bg-institutional-700 px-3 py-2 text-sm font-bold text-white hover:bg-institutional-900">Recibir documento</button>
+                                            <button type="submit" class="ft-button-primary">Recibir documento</button>
                                         </form>
                                     @endcan
 
@@ -182,12 +191,12 @@
                                             @method('PATCH')
                                             <input type="hidden" name="document_lock_version" value="{{ $document->lock_version }}">
                                             <input type="hidden" name="recipient_lock_version" value="{{ $recipient->lock_version }}">
-                                            <button type="submit" class="inline-flex min-h-10 items-center rounded-lg bg-institutional-700 px-3 py-2 text-sm font-bold text-white hover:bg-institutional-900">Iniciar revisión</button>
+                                            <button type="submit" class="ft-button-primary">Iniciar revisión</button>
                                         </form>
                                     @endcan
 
                                     @can('approveRecipient', [$document, $recipient])
-                                        <form method="POST" action="{{ route('documents.recipients.transition', [$document, $recipient, 'approve']) }}" onsubmit="return confirm('¿Está seguro de aprobar este documento?');">
+                                        <form method="POST" action="{{ route('documents.recipients.transition', [$document, $recipient, 'approve']) }}" onsubmit="return confirm('¿Desea aprobar este documento para el destinatario indicado? La decisión quedará registrada en el historial.');">
                                             @csrf
                                             @method('PATCH')
                                             <input type="hidden" name="document_lock_version" value="{{ $document->lock_version }}">
@@ -255,7 +264,7 @@
                         <option value="0">Copia informativa</option>
                     </select>
 
-                    <button type="submit" class="mt-4 inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-institutional-700 px-4 py-2.5 text-sm font-bold text-white hover:bg-institutional-900">Agregar unidad</button>
+                    <button type="submit" class="ft-button-primary mt-4 w-full">Agregar unidad</button>
                 </form>
 
                 <form method="POST" action="{{ route('documents.recipients.store', $document) }}" class="rounded-xl border border-slate-200 p-4">
@@ -283,7 +292,7 @@
                     </select>
                     <p data-personal-recipient-help hidden class="mt-2 text-xs font-semibold text-amber-700">El Auxiliar solo puede seleccionarse como copia informativa.</p>
 
-                    <button type="submit" class="mt-4 inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-institutional-700 px-4 py-2.5 text-sm font-bold text-white hover:bg-institutional-900">Agregar persona</button>
+                    <button type="submit" class="ft-button-primary mt-4 w-full">Agregar persona</button>
                 </form>
             </div>
         @endif
@@ -313,7 +322,7 @@
                             <form method="POST" action="{{ route('documents.correction.send', $document) }}" class="mt-4" onsubmit="return confirm('¿Confirma el envío de esta corrección? Los destinatarios devueltos volverán al estado Enviado.');">
                                 @csrf
                                 <input type="hidden" name="document_lock_version" value="{{ $document->lock_version }}">
-                                <button type="submit" class="inline-flex min-h-11 items-center justify-center rounded-lg bg-institutional-700 px-4 py-2.5 text-sm font-bold text-white hover:bg-institutional-900">Enviar corrección</button>
+                                <button type="submit" class="ft-button-primary">Enviar corrección</button>
                             </form>
                         @endcan
                     </div>
@@ -413,7 +422,7 @@
                 <p id="document-files-help" class="mt-2 text-xs leading-5 text-slate-600">
                     Máximo {{ config('documents.uploads.max_files_per_request') }} archivos por carga y {{ config('documents.uploads.max_size_kb') / 1024 }} MB por archivo. Formatos: PDF, Word, Excel, PowerPoint, JPG, PNG y ZIP.
                 </p>
-                <button type="submit" class="mt-4 inline-flex min-h-11 items-center justify-center rounded-lg bg-institutional-700 px-4 py-2.5 text-sm font-bold text-white hover:bg-institutional-900">Adjuntar archivos</button>
+                <button type="submit" class="ft-button-primary mt-4">Adjuntar archivos</button>
             </form>
         @endif
     </section>
@@ -506,7 +515,7 @@
                     </div>
                 </div>
                 <p class="mt-3 text-xs leading-5 text-slate-600">“Ver” no permite descargar. “Ver y descargar” habilita ambos accesos. La vigencia se evalúa automáticamente en America/La_Paz.</p>
-                <button type="submit" @disabled($eligibleAccessUsers->isEmpty()) class="mt-4 inline-flex min-h-11 items-center justify-center rounded-lg bg-institutional-700 px-4 py-2.5 text-sm font-bold text-white hover:bg-institutional-900 disabled:cursor-not-allowed disabled:opacity-50">Conceder acceso</button>
+                <button type="submit" @disabled($eligibleAccessUsers->isEmpty()) class="ft-button-primary mt-4">Conceder acceso</button>
                 @if ($eligibleAccessUsers->isEmpty())
                     <p class="mt-2 text-xs font-semibold text-slate-600">No hay usuarios Extra activos y disponibles dentro de su ámbito.</p>
                 @endif
@@ -528,7 +537,7 @@
             <form method="POST" action="{{ route('documents.send', $document) }}" class="mt-5" onsubmit="return confirm('¿Confirma el envío oficial de este documento? Se asignará un código y ya no podrá modificar destinatarios ni archivos.');">
                 @csrf
                 <input type="hidden" name="document_lock_version" value="{{ $document->lock_version }}">
-                <button type="submit" @disabled($document->recipients->isEmpty()) class="inline-flex min-h-11 items-center justify-center rounded-lg bg-institutional-700 px-4 py-2.5 text-sm font-bold text-white hover:bg-institutional-900 disabled:cursor-not-allowed disabled:opacity-50">Enviar documento</button>
+                <button type="submit" @disabled($document->recipients->isEmpty()) class="ft-button-primary">Enviar documento</button>
             </form>
             @if ($document->recipients->isEmpty())
                 <p class="mt-2 text-xs font-semibold text-red-700">Debe agregar al menos un destinatario antes de enviar.</p>
@@ -545,7 +554,7 @@
                 <div><dt class="font-bold text-red-950">Código oficial</dt><dd class="text-red-900">{{ $document->code }}</dd></div>
                 <div><dt class="font-bold text-red-950">Estado actual</dt><dd class="text-red-900">{{ $document->general_status->label() }}</dd></div>
             </dl>
-            <form method="POST" action="{{ route('documents.annul', $document) }}" class="mt-5" onsubmit="return confirm('¿Confirma la anulación definitiva? El documento quedará sin efecto institucional y esta acción no se puede deshacer.');">
+            <form method="POST" action="{{ route('documents.annul', $document) }}" class="mt-5" onsubmit="return confirm('¿Desea anular este documento? Quedará sin efecto institucional y no podrá deshacerse. El expediente y su historial permanecerán conservados.');">
                 @csrf
                 <input type="hidden" name="document_lock_version" value="{{ $document->lock_version }}">
                 <label for="annulment_reason" class="block text-sm font-bold text-red-950">Motivo obligatorio</label>

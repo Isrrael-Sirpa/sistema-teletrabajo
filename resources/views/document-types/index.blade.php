@@ -6,7 +6,7 @@
             <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600">Los tipos inactivos conservan su historial, pero no estarán disponibles para crear documentos nuevos.</p>
         </div>
         @can('create', App\Models\DocumentType::class)
-            <a href="{{ route('document-types.create') }}" class="inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg bg-institutional-700 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-institutional-900">Crear tipo documental</a>
+            <a href="{{ route('document-types.create') }}" class="ft-button-primary shrink-0">Crear tipo documental</a>
         @endcan
     </div>
 

@@ -24,7 +24,7 @@
 
         <div class="mt-6 flex flex-wrap gap-3">
             @can('update', $documentType)
-                <a href="{{ route('document-types.edit', $documentType) }}" class="inline-flex min-h-11 items-center justify-center rounded-lg bg-institutional-700 px-4 py-2.5 text-sm font-bold text-white hover:bg-institutional-900">Editar tipo</a>
+                <a href="{{ route('document-types.edit', $documentType) }}" class="ft-button-primary">Editar tipo</a>
             @endcan
             @can('deactivate', $documentType)
                 <form method="POST" action="{{ route('document-types.deactivate', $documentType) }}" onsubmit="return confirm('¿Está seguro de desactivar este tipo? No se eliminarán documentos históricos, pero dejará de estar disponible para documentos nuevos.')">
