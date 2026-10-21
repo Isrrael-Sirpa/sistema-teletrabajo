@@ -1,8 +1,47 @@
+@php
+    $viewer = auth()->user();
+    $isDraft = $document->general_status === App\Enums\DocumentStatus::DRAFT;
+    $isOriginViewer = $document->created_by === $viewer->id || $document->origin_unit_id === $viewer->organizational_unit_id;
+    $mainRecipients = $document->recipients->where('requires_response', true);
+    $copyRecipients = $document->recipients->where('requires_response', false);
+    $documentFiles = $document->versions->sortByDesc('version_number')->flatMap(fn ($version) => $version->files)->values();
+    $canObtainFiles = Gate::allows('downloadFile', $document);
+    $ownRecipient = $document->recipients
+        ->filter(fn ($recipient) => $recipient->user_id === $viewer->id
+            || ($recipient->user_id === null && $recipient->unit_id === $viewer->organizational_unit_id))
+        ->sortByDesc(fn ($recipient) => (int) $recipient->requires_response)
+        ->first();
+    $isSenderContext = $isOriginViewer && ! $ownRecipient && ! $viewer->hasInstitutionalGlobalScope();
+    $recipientCounts = $mainRecipients->countBy(fn ($recipient) => $recipient->status->value);
+    $unitOnlyDestinations = $mainRecipients->every(fn ($recipient) => $recipient->user_id === null
+        && $recipient->unit->type === App\Enums\OrganizationalUnitType::CAREER);
+    $destinationCount = $unitOnlyDestinations
+        ? $mainRecipients->pluck('unit_id')->unique()->count()
+        : $mainRecipients->count();
+    $destinationLabel = $unitOnlyDestinations ? ($destinationCount === 1 ? 'carrera' : 'carreras') : ($destinationCount === 1 ? 'destinatario principal' : 'destinatarios principales');
+    $summaryAction = $ownRecipient && ! $isDraft ? match (true) {
+        $ownRecipient->status === App\Enums\DocumentRecipientStatus::SENT && Gate::allows('receiveRecipient', [$document, $ownRecipient]) => 'receive',
+        $ownRecipient->status === App\Enums\DocumentRecipientStatus::RECEIVED && Gate::allows('reviewRecipient', [$document, $ownRecipient]) => 'start_review',
+        $ownRecipient->status === App\Enums\DocumentRecipientStatus::IN_REVIEW && Gate::allows('approveRecipient', [$document, $ownRecipient]) => 'approve',
+        default => null,
+    } : null;
+    $simpleStatus = match ($document->general_status) {
+        App\Enums\DocumentStatus::SENT => 'Esperando recepción',
+        App\Enums\DocumentStatus::RECEIVED => 'En proceso',
+        App\Enums\DocumentStatus::IN_REVIEW => 'En revisión',
+        App\Enums\DocumentStatus::APPROVED => 'Finalizado / Aprobado',
+        App\Enums\DocumentStatus::RETURNED => 'Requiere corrección',
+        App\Enums\DocumentStatus::REJECTED => 'Rechazado',
+        App\Enums\DocumentStatus::ANNULLED => 'Anulado',
+        default => 'Borrador',
+    };
+@endphp
+
 <x-layouts.authenticated :title="$document->subject" :career-unit="$document->originUnit->type === App\Enums\OrganizationalUnitType::CAREER ? $document->originUnit : null">
-    <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+    <div class="ft-page-header">
         <div>
             <p class="ft-section-heading">{{ $document->code ?? 'Borrador sin código' }}</p>
-            <h1 class="mt-1 max-w-4xl text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">{{ $document->subject }}</h1>
+            <h1 class="ft-page-title max-w-4xl">{{ $document->subject }}</h1>
             <div class="mt-3 flex flex-wrap gap-2">
                 <x-ui.status-badge :status="$document->general_status" />
                 <span class="ft-badge bg-slate-100 text-slate-700">Prioridad: {{ $document->priority->label() }}</span>
@@ -21,27 +60,148 @@
             @can('update', $document)
                 <a href="{{ route('documents.edit', $document) }}" class="ft-button-primary">Editar borrador</a>
             @endcan
-            <a href="{{ route('documents.index') }}" class="inline-flex min-h-11 items-center justify-center rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50">Volver</a>
+            <a href="{{ route('documents.index') }}" class="ft-button-secondary">Volver a documentos</a>
         </div>
     </div>
 
-    @if (session('status'))
-        <div role="status" class="mt-6 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">{{ session('status') }}</div>
-    @endif
     @if ($errors->any())
-        <div role="alert" class="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">{{ $errors->first() }}</div>
+        <div role="alert" data-form-errors tabindex="-1" class="ft-alert ft-alert-error mt-6"><p class="font-bold">No se pudo completar la acción.</p><ul class="mt-1 list-disc pl-5">@foreach ($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul><p class="mt-2">Revise el mensaje antes de intentarlo nuevamente. No vuelva a enviar si no puede confirmar el resultado.</p></div>
     @endif
 
-    <x-ui.document-stepper :status="$document->general_status" />
-
-    <nav class="mt-5 flex gap-2 overflow-x-auto pb-2" aria-label="Secciones del documento">
-        <a href="#document-data-title" class="ft-button-secondary shrink-0">Información</a>
-        <a href="#recipients-title" class="ft-button-secondary shrink-0">Destinatarios</a>
-        <a href="#files-title" class="ft-button-secondary shrink-0">Archivos</a>
-        <a href="#history-title" class="ft-button-secondary shrink-0">Historial</a>
-        @if ($canManageAccessGrants)<a href="#access-grants-title" class="ft-button-secondary shrink-0">Accesos</a>@endif
-        @can('send', $document)<a href="#send-title" class="ft-button-primary shrink-0">Enviar</a>@endcan
-    </nav>
+    @if ($isDraft)
+        <x-ui.document-stepper :status="$document->general_status" />
+        <nav class="mt-5 flex gap-2 overflow-x-auto pb-2" aria-label="Secciones del borrador">
+            <a href="#document-data-title" class="ft-button-secondary shrink-0">Información</a>
+            <a href="#recipients-title" class="ft-button-secondary shrink-0">Destinatarios</a>
+            <a href="#files-title" class="ft-button-secondary shrink-0">Archivos</a>
+            <a href="#history-title" class="ft-button-secondary shrink-0">Historial</a>
+            @can('send', $document)<a href="#send-title" class="ft-button-primary shrink-0">Enviar</a>@endcan
+        </nav>
+        <p class="ft-alert ft-alert-info mt-3">El borrador aún no es un envío oficial. Complete los destinatarios, adjunte los archivos y revise el resumen en «Enviar».</p>
+    @else
+        <section class="ft-card ft-card-accent mt-6 p-5 sm:p-7" aria-labelledby="tracking-summary-title">
+            <p class="ft-section-heading">{{ $isSenderContext ? 'SEGUIMIENTO DEL DOCUMENTO' : ($ownRecipient ? ($ownRecipient->requires_response ? 'DOCUMENTO PARA SU ATENCIÓN' : 'COPIA INFORMATIVA') : 'ESTADO DEL DOCUMENTO') }}</p>
+            <h2 id="tracking-summary-title" class="mt-2 text-xl font-bold text-slate-950 sm:text-2xl">
+                @if ($isSenderContext && $document->general_status === App\Enums\DocumentStatus::RETURNED)
+                    Este documento requiere su atención.
+                @elseif ($isSenderContext && $document->general_status === App\Enums\DocumentStatus::APPROVED)
+                    Documento finalizado.
+                @elseif ($isSenderContext && $document->general_status === App\Enums\DocumentStatus::REJECTED)
+                    Documento rechazado.
+                @elseif ($isSenderContext && $document->general_status === App\Enums\DocumentStatus::ANNULLED)
+                    Documento anulado.
+                @elseif ($isSenderContext)
+                    Documento enviado.
+                @elseif ($ownRecipient && ! $ownRecipient->requires_response)
+                    Copia informativa para {{ $ownRecipient->user_id ? 'usted' : 'su carrera' }}.
+                @elseif ($ownRecipient)
+                    @switch ($ownRecipient->status)
+                        @case (App\Enums\DocumentRecipientStatus::SENT) Nuevo documento @break
+                        @case (App\Enums\DocumentRecipientStatus::RECEIVED) Documento recibido @break
+                        @case (App\Enums\DocumentRecipientStatus::IN_REVIEW) Documento en revisión @break
+                        @case (App\Enums\DocumentRecipientStatus::APPROVED) Documento aprobado @break
+                        @case (App\Enums\DocumentRecipientStatus::RETURNED) Documento devuelto @break
+                        @case (App\Enums\DocumentRecipientStatus::REJECTED) Documento rechazado @break
+                        @default Seguimiento del documento
+                    @endswitch
+                @else
+                    Seguimiento del documento.
+                @endif
+            </h2>
+            <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+                @if ($isSenderContext && $document->general_status === App\Enums\DocumentStatus::RETURNED)
+                    Una carrera solicitó una corrección. Revise sus observaciones antes de preparar la nueva versión.
+                @elseif ($isSenderContext && $document->general_status === App\Enums\DocumentStatus::REJECTED)
+                    Se registró un rechazo. Consulte el seguimiento y el historial para conocer la decisión.
+                @elseif ($isSenderContext && $document->general_status === App\Enums\DocumentStatus::ANNULLED)
+                    Este documento quedó sin efecto institucional. Su expediente e historial se conservan.
+                @elseif ($isSenderContext)
+                    El envío ya está realizado. Aquí puede ver cómo avanza cada destinatario.
+                @elseif ($ownRecipient && ! $ownRecipient->requires_response)
+                    Este documento se comparte solo para su conocimiento. No necesita aprobarlo ni responderlo.
+                @elseif ($ownRecipient)
+                    @switch ($ownRecipient->status)
+                        @case (App\Enums\DocumentRecipientStatus::SENT)
+                            Este documento fue enviado a {{ $ownRecipient->user_id ? 'usted' : 'su carrera' }}.
+                            {{ $summaryAction === 'receive' ? 'Puede recibirlo ahora.' : 'Puede consultar sus archivos y seguimiento.' }}
+                            @break
+                        @case (App\Enums\DocumentRecipientStatus::RECEIVED)
+                            {{ $summaryAction === 'start_review' ? 'Puede revisar el contenido antes de iniciar su evaluación.' : 'El documento ya fue recibido. Puede consultar sus archivos y seguimiento.' }}
+                            @break
+                        @case (App\Enums\DocumentRecipientStatus::IN_REVIEW)
+                            Está en revisión. La persona autorizada puede registrar la decisión.
+                            @break
+                        @case (App\Enums\DocumentRecipientStatus::APPROVED)
+                            Su destino aprobó el documento. No hay acciones pendientes.
+                            @break
+                        @case (App\Enums\DocumentRecipientStatus::RETURNED)
+                            Su destino solicitó una corrección al remitente.
+                            @break
+                        @case (App\Enums\DocumentRecipientStatus::REJECTED)
+                            Su destino rechazó el documento. Consulte el historial si necesita más detalles.
+                            @break
+                        @default
+                            Consulte el estado de su destino y las acciones que tenga disponibles.
+                    @endswitch
+                @else
+                    Consulte el avance de los destinatarios y la información conservada del expediente.
+                @endif
+            </p>
+            <dl class="mt-5 grid gap-4 rounded-xl bg-slate-50 p-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div><dt class="text-xs font-bold uppercase tracking-wide text-slate-500">Destinatarios principales</dt><dd class="mt-1 text-sm font-bold text-slate-950">{{ $mainRecipients->map(fn ($recipient) => $recipient->user?->name ?? $recipient->unit->name)->join(', ') ?: 'Ninguno' }}</dd></div>
+                <div><dt class="text-xs font-bold uppercase tracking-wide text-slate-500">Copias informativas</dt><dd class="mt-1 text-sm font-bold text-slate-950">{{ $copyRecipients->map(fn ($recipient) => $recipient->user?->name ?? $recipient->unit->name)->join(', ') ?: 'Ninguna' }}</dd></div>
+                <div><dt class="text-xs font-bold uppercase tracking-wide text-slate-500">Fecha de envío</dt><dd class="mt-1 text-base font-bold text-slate-950">{{ $document->sent_at?->timezone(config('app.timezone'))->format('d/m/Y H:i') ?? 'No disponible' }}</dd></div>
+                <div><dt class="text-xs font-bold uppercase tracking-wide text-slate-500">Estado general</dt><dd class="mt-1 text-base font-bold text-slate-950">{{ $simpleStatus }}</dd></div>
+            </dl>
+            @if ($isSenderContext)
+                <p @class(['mt-5 rounded-lg px-4 py-3 text-sm font-semibold', 'bg-amber-50 text-amber-950' => $document->general_status === App\Enums\DocumentStatus::RETURNED, 'bg-blue-50 text-blue-950' => $document->general_status !== App\Enums\DocumentStatus::RETURNED])>
+                    @if ($document->general_status === App\Enums\DocumentStatus::RETURNED)
+                        {{ $pendingCorrectionVersion ? 'La corrección está preparada. Revise las observaciones y envíela cuando esté lista.' : 'Revise las observaciones y prepare la corrección cuando corresponda.' }}
+                    @elseif ($document->general_status === App\Enums\DocumentStatus::APPROVED)
+                        No tiene acciones pendientes. El trámite quedó aprobado.
+                    @elseif ($document->general_status === App\Enums\DocumentStatus::REJECTED)
+                        No hay una corrección disponible para este estado. Consulte las decisiones registradas.
+                    @elseif ($document->general_status === App\Enums\DocumentStatus::ANNULLED)
+                        No puede realizar nuevas acciones sobre este documento.
+                    @else
+                        Por ahora no necesita realizar ninguna acción.
+                    @endif
+                </p>
+            @endif
+            <p class="mt-4 text-sm font-semibold text-slate-700">Archivos adjuntos: {{ $documentFiles->count() }}</p>
+            <div class="mt-5 flex flex-wrap gap-2">
+                @if ($canObtainFiles && $documentFiles->isNotEmpty())
+                    <a href="#files-title" data-file-viewer-open="{{ $documentFiles->first()->public_id }}" aria-haspopup="dialog" class="ft-button-secondary">Visualizar archivos</a>
+                @endif
+                @if ($summaryAction)
+                    <form method="POST" action="{{ route('documents.recipients.transition', [$document, $ownRecipient, $summaryAction]) }}" @if ($summaryAction === 'approve') onsubmit="return confirm('¿Desea aprobar este documento? La decisión quedará registrada en el historial.');" @endif>
+                        @csrf
+                        @method('PATCH')
+                        <input type="hidden" name="document_lock_version" value="{{ $document->lock_version }}">
+                        <input type="hidden" name="recipient_lock_version" value="{{ $ownRecipient->lock_version }}">
+                        <button type="submit" class="ft-button-primary">{{ match ($summaryAction) {
+                            'receive' => $ownRecipient->requires_response ? 'Recibir documento' : 'Registrar recepción de copia',
+                            'start_review' => 'Iniciar revisión',
+                            'approve' => 'Aprobar documento',
+                        } }}</button>
+                    </form>
+                @endif
+                <a href="#recipients-title" class="{{ $summaryAction ? 'ft-button-secondary' : 'ft-button-primary' }}">Ver seguimiento</a>
+                @if ($isSenderContext && $document->general_status === App\Enums\DocumentStatus::RETURNED)
+                    <a href="#correction-title" class="ft-button-secondary">Ver observaciones</a>
+                    @if ($pendingCorrectionVersion)
+                        @can('sendCorrection', $document)<a href="#correction-title" class="ft-button-secondary">Enviar corrección</a>@endcan
+                    @else
+                        @can('createCorrectionVersion', $document)<a href="#correction-title" class="ft-button-secondary">Preparar corrección</a>@endcan
+                    @endif
+                @endif
+                @unless ($canObtainFiles && $documentFiles->isNotEmpty())
+                    <a href="#files-title" class="ft-button-secondary">Ver archivos</a>
+                @endunless
+                <a href="#history-title" class="ft-button-secondary">Ver historial</a>
+            </div>
+        </section>
+    @endif
 
     @if ($document->general_status === App\Enums\DocumentStatus::ANNULLED)
         <section class="mt-6 rounded-2xl border-2 border-red-700 bg-red-50 p-5 shadow-sm sm:p-7" aria-labelledby="annulled-title">
@@ -60,8 +220,13 @@
         </section>
     @endif
 
-    <section class="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7" aria-labelledby="document-data-title">
-        <h2 id="document-data-title" class="text-lg font-bold text-slate-950">Datos del documento</h2>
+    @unless ($isDraft)
+        <details class="ft-card mt-6 p-5 sm:p-7">
+            <summary id="document-data-title" class="text-lg font-bold text-slate-950">Información del documento <span class="ml-2 text-sm font-normal text-slate-600">(ver detalles)</span></summary>
+    @else
+        <section class="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7" aria-labelledby="document-data-title">
+            <h2 id="document-data-title" class="text-lg font-bold text-slate-950">Datos del documento</h2>
+    @endunless
         <dl class="mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             <div><dt class="text-xs font-bold uppercase tracking-wide text-slate-500">Código oficial</dt><dd class="mt-1 text-sm font-semibold text-slate-900">{{ $document->code ?? 'Se asignará al enviar' }}</dd></div>
             <div><dt class="text-xs font-bold uppercase tracking-wide text-slate-500">Tipo documental</dt><dd class="mt-1 text-sm text-slate-900">{{ $document->documentType->name }}</dd></div>
@@ -87,58 +252,101 @@
             <h3 class="text-sm font-bold text-slate-800">Descripción</h3>
             <p class="mt-2 whitespace-pre-line text-sm leading-6 text-slate-700">{{ $document->description ?: 'Sin descripción.' }}</p>
         </div>
-    </section>
+    @unless ($isDraft)
+        </details>
+    @else
+        </section>
+    @endunless
 
-    <section class="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7" aria-labelledby="recipients-title">
+    <section @if ($isDraft && $canManageRecipients) data-recipient-editor="{{ $document->public_id }}" @endif class="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7" aria-labelledby="recipients-title">
         <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div>
-                <h2 id="recipients-title" class="text-lg font-bold text-slate-950">Destinatarios</h2>
+                <h2 id="recipients-title" class="text-lg font-bold text-slate-950">{{ $isDraft ? 'Destinatarios' : 'Seguimiento por destinatario' }}</h2>
                 <p class="mt-1 text-sm leading-6 text-slate-600">
-                    @if ($document->general_status === App\Enums\DocumentStatus::DRAFT)
+                    @if ($isDraft)
                         Estos destinatarios están preparados. El documento todavía no fue enviado.
                     @elseif ($document->general_status === App\Enums\DocumentStatus::ANNULLED)
-                        Estados históricos conservados. La anulación no modifica las recepciones, revisiones ni decisiones individuales.
+                        Se conservan los estados que tenía cada destinatario al anular el documento.
                     @else
-                        Cada destinatario conserva su recepción, revisión y decisión de forma independiente.
+                        Vea quién recibió el documento, quién lo revisa y qué decisiones se registraron.
                     @endif
                 </p>
             </div>
-            <span class="inline-flex w-fit rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-800">{{ $document->recipients->count() }} {{ $document->recipients->count() === 1 ? 'destinatario' : 'destinatarios' }}</span>
+            <span data-recipient-counts class="inline-flex w-fit rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-800">{{ $mainRecipients->count() }} {{ $mainRecipients->count() === 1 ? 'principal' : 'principales' }} · {{ $copyRecipients->count() }} {{ $copyRecipients->count() === 1 ? 'copia' : 'copias' }}</span>
         </div>
 
+        @unless ($isDraft)
+            @if ($mainRecipients->count() > 1)
+                <div class="mt-5 flex flex-wrap items-center gap-2 rounded-xl bg-slate-50 p-4 text-sm text-slate-700" aria-label="Resumen de destinatarios">
+                    <span class="mr-2 font-bold text-slate-950">{{ $destinationCount }} {{ $destinationLabel }}:</span>
+                    @foreach (['approved' => ['aprobó', 'aprobaron'], 'in_review' => ['en revisión', 'en revisión'], 'received' => ['recibió', 'recibieron'], 'sent' => ['espera recepción', 'esperan recepción'], 'returned' => ['devolvió', 'devolvieron'], 'rejected' => ['rechazó', 'rechazaron']] as $status => $summary)
+                        @if (($recipientCounts[$status] ?? 0) > 0)
+                            <span class="rounded-full border border-slate-200 bg-white px-3 py-1 font-semibold">{{ $recipientCounts[$status] }} {{ $summary[$recipientCounts[$status] === 1 ? 0 : 1] }}</span>
+                        @endif
+                    @endforeach
+                </div>
+            @endif
+            <div class="mt-5">
+                <h3 class="text-sm font-bold uppercase tracking-wide text-slate-800">Destinatarios principales</h3>
+                <p class="mt-1 text-sm text-slate-600">Deben atender el documento.</p>
+                <div class="mt-3 grid gap-3">
+                    @forelse ($mainRecipients as $recipient)
+                        @include('documents.partials.recipient-tracking-card', ['recipient' => $recipient, 'document' => $document, 'isSenderContext' => $isSenderContext])
+                    @empty
+                        <p class="text-sm text-slate-600">No hay destinatarios principales.</p>
+                    @endforelse
+                </div>
+            </div>
+            @if ($copyRecipients->isNotEmpty())
+                <div class="mt-6 border-t border-slate-200 pt-5">
+                    <h3 class="text-sm font-bold uppercase tracking-wide text-slate-700">Copias informativas</h3>
+                    <p class="mt-1 text-sm text-slate-600">Solo reciben el documento para conocimiento; no necesitan aprobarlo ni responderlo.</p>
+                    <div class="mt-3 grid gap-3">
+                        @foreach ($copyRecipients as $recipient)
+                            @include('documents.partials.recipient-tracking-card', ['recipient' => $recipient, 'document' => $document, 'isSenderContext' => $isSenderContext])
+                        @endforeach
+                    </div>
+                </div>
+            @endif
+        @else
+        <p data-recipient-feedback role="status" aria-live="polite" hidden class="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-950"></p>
+        <button type="button" data-recipient-sync hidden class="ft-button-secondary mt-2">Reintentar actualización</button>
+        <div data-recipient-list>
         @if ($document->recipients->isNotEmpty())
-            <div class="mt-5 overflow-x-auto rounded-xl border border-slate-200">
-                <table class="min-w-full divide-y divide-slate-200">
-                    <caption class="sr-only">Destinatarios preparados para este borrador.</caption>
-                    <thead class="bg-slate-50">
-                        <tr>
-                            <th scope="col" class="px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-slate-600">Destinatario</th>
-                            <th scope="col" class="px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-slate-600">Finalidad</th>
-                            <th scope="col" class="px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-slate-600">Estado</th>
-                            <th scope="col" class="px-4 py-3 text-right text-xs font-bold uppercase tracking-wide text-slate-600">Acciones</th>
+            <div class="ft-table-wrap mt-5">
+                <table class="ft-data-table divide-y divide-slate-200" role="table">
+                    <caption class="sr-only">Destinatarios principales y copias informativas preparados para este borrador.</caption>
+                    <thead class="bg-slate-50" role="rowgroup">
+                        <tr role="row">
+                            <th scope="col" role="columnheader" class="px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-slate-600">Destinatario</th>
+                            <th scope="col" role="columnheader" class="px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-slate-600">Finalidad</th>
+                            <th scope="col" role="columnheader" class="px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-slate-600">Estado</th>
+                            <th scope="col" role="columnheader" class="px-4 py-3 text-right text-xs font-bold uppercase tracking-wide text-slate-600">Acciones</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-200">
-                        @foreach ($document->recipients as $recipient)
-                            <tr>
-                                <td class="px-4 py-4">
+                    <tbody class="divide-y divide-slate-200" role="rowgroup">
+                        @foreach ([['title' => 'Destinatarios principales', 'help' => 'Deben atender el documento.', 'items' => $mainRecipients], ['title' => 'Copias informativas', 'help' => 'Solo reciben el documento para conocimiento.', 'items' => $copyRecipients]] as $group)
+                            <tr role="row" class="bg-slate-50"><th role="rowheader" scope="rowgroup" colspan="4" class="px-4 py-3 text-left"><span class="block text-sm font-bold text-slate-900">{{ $group['title'] }}</span><span class="block text-xs font-normal text-slate-600">{{ $group['help'] }}</span></th></tr>
+                        @forelse ($group['items'] as $recipient)
+                            <tr role="row">
+                                <td role="cell" data-label="Destinatario" class="px-4 py-4">
                                     <p class="font-semibold text-slate-900">{{ $recipient->user?->name ?? $recipient->unit->name }}</p>
                                     <p class="mt-1 text-xs text-slate-500">{{ $recipient->user ? 'Persona específica · '.$recipient->unit->name : 'Carrera o unidad completa' }}</p>
                                 </td>
-                                <td class="px-4 py-4">
+                                <td role="cell" data-label="Finalidad" class="px-4 py-4">
                                     @if ($canManageRecipients)
                                         @php
                                             $canRequirePersonalResponse = ! $recipient->user
                                                 || $recipient->user->roleName()?->canBeFormalPersonalDocumentRecipient();
                                         @endphp
-                                        <form method="POST" action="{{ route('documents.recipients.update', $document) }}" class="flex flex-wrap items-center gap-2">
+                                        <form method="POST" action="{{ route('documents.recipients.update', $document) }}" data-recipient-operation="update" class="flex flex-wrap items-center gap-2">
                                             @csrf
                                             @method('PATCH')
                                             <input type="hidden" name="recipient_id" value="{{ $recipient->id }}">
                                             <input type="hidden" name="lock_version" value="{{ $document->lock_version }}">
                                             <label class="sr-only" for="requires_response_{{ $recipient->id }}">Finalidad para {{ $recipient->user?->name ?? $recipient->unit->name }}</label>
                                             <select id="requires_response_{{ $recipient->id }}" name="requires_response" class="min-h-10 rounded-lg border-slate-300 py-2 text-sm focus:border-blue-600 focus:ring-blue-600">
-                                                <option value="1" @selected($recipient->requires_response) @disabled(! $canRequirePersonalResponse)>Requiere respuesta</option>
+                                                <option value="1" @selected($recipient->requires_response) @disabled(! $canRequirePersonalResponse)>Destinatario principal</option>
                                                 <option value="0" @selected(! $recipient->requires_response)>Copia informativa</option>
                                             </select>
                                             <button type="submit" class="inline-flex min-h-10 items-center rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50">Actualizar</button>
@@ -148,10 +356,10 @@
                                             'inline-flex rounded-full px-2.5 py-1 text-xs font-bold',
                                             'bg-emerald-50 text-emerald-800' => $recipient->requires_response,
                                             'bg-slate-100 text-slate-700' => ! $recipient->requires_response,
-                                        ])>{{ $recipient->requires_response ? 'Requiere respuesta' : 'Copia informativa' }}</span>
+                                        ])>{{ $recipient->requires_response ? 'Destinatario principal' : 'Copia informativa' }}</span>
                                     @endif
                                 </td>
-                                <td class="px-4 py-4">
+                                <td role="cell" data-label="Estado" class="px-4 py-4">
                                     <span class="inline-flex rounded-full bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-800">{{ $recipient->status->label() }}</span>
                                     @if ($recipient->receiver)
                                         <p class="mt-2 text-xs text-slate-500">Recibido por {{ $recipient->receiver->name }}<br>{{ $recipient->received_at?->format('d/m/Y H:i') }}</p>
@@ -163,10 +371,10 @@
                                         <p class="mt-2 max-w-sm whitespace-pre-line text-xs text-slate-600">Motivo: {{ $recipient->decision_reason }}</p>
                                     @endif
                                 </td>
-                                <td class="px-4 py-4 text-right">
+                                <td role="cell" data-label="Acciones" class="px-4 py-4 text-right">
                                     <div class="flex flex-col items-end gap-2">
                                     @if ($canManageRecipients)
-                                        <form method="POST" action="{{ route('documents.recipients.destroy', $document) }}" onsubmit="return confirm('¿Quitar este destinatario del borrador?');">
+                                        <form method="POST" action="{{ route('documents.recipients.destroy', $document) }}" data-recipient-operation="remove" onsubmit="return confirm('¿Quitar este destinatario del borrador?');">
                                             @csrf
                                             @method('DELETE')
                                             <input type="hidden" name="recipient_id" value="{{ $recipient->id }}">
@@ -233,6 +441,9 @@
                                     </div>
                                 </td>
                             </tr>
+                        @empty
+                            <tr role="row"><td role="cell" colspan="4" class="px-4 py-3 text-sm text-slate-500">Ninguno por ahora.</td></tr>
+                        @endforelse
                         @endforeach
                     </tbody>
                 </table>
@@ -240,62 +451,89 @@
         @else
             <div class="mt-5 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center text-sm text-slate-600">Todavía no se agregaron destinatarios.</div>
         @endif
+        </div>
 
         @if ($canManageRecipients)
-            <div class="mt-6 grid gap-5 border-t border-slate-200 pt-6 lg:grid-cols-2">
-                <form method="POST" action="{{ route('documents.recipients.store', $document) }}" class="rounded-xl border border-slate-200 p-4">
+            <div class="mt-6 border-t border-slate-200 pt-6">
+                <h3 class="text-base font-bold text-slate-950">Destinatarios principales</h3>
+                <p class="mt-1 text-sm text-slate-600">Seleccione una o varias carreras que deben atender este documento. La carrera es el destino institucional; no necesita elegir a su Jefe, Secretaria o Auxiliar.</p>
+                <form method="POST" action="{{ route('documents.recipients.store', $document) }}" data-multi-career-form class="mt-4 rounded-xl border border-blue-200 bg-blue-50/40 p-4">
                     @csrf
-                    <input type="hidden" name="recipient_type" value="unit">
-                    <input type="hidden" name="lock_version" value="{{ $document->lock_version }}">
-                    <h3 class="font-bold text-slate-900">Enviar a una carrera o unidad</h3>
-                    <p class="mt-1 text-xs leading-5 text-slate-600">Puede elegir una carrera activa o Kardex. La Facultad no se ofrece como destino ordinario.</p>
-
-                    <label for="recipient_unit_id" class="mt-4 block text-sm font-bold text-slate-800">Carrera o unidad</label>
-                    <select id="recipient_unit_id" name="unit_id" required class="mt-2 block min-h-11 w-full rounded-lg border-slate-300 shadow-sm focus:border-blue-600 focus:ring-blue-600">
-                        <option value="">Seleccione una opción</option>
-                        @foreach ($recipientUnits as $unit)
-                            <option value="{{ $unit->id }}">{{ $unit->name }} ({{ $unit->type->label() }})</option>
-                        @endforeach
-                    </select>
-
-                    <label for="unit_requires_response" class="mt-4 block text-sm font-bold text-slate-800">Finalidad</label>
-                    <select id="unit_requires_response" name="requires_response" required class="mt-2 block min-h-11 w-full rounded-lg border-slate-300 shadow-sm focus:border-blue-600 focus:ring-blue-600">
-                        <option value="1">Requiere respuesta</option>
-                        <option value="0">Copia informativa</option>
-                    </select>
-
-                    <button type="submit" class="ft-button-primary mt-4 w-full">Agregar unidad</button>
+                    <input type="hidden" name="lock_version" value="{{ $document->lock_version }}" data-multi-career-lock-version>
+                    <label for="career_search" class="block text-sm font-bold text-slate-800">Buscar carrera</label>
+                    <input id="career_search" type="search" data-career-search placeholder="Escriba el nombre o la sigla" class="mt-2 block min-h-11 w-full rounded-lg border-slate-300 shadow-sm focus:border-blue-600 focus:ring-blue-600">
+                    <fieldset class="mt-4">
+                        <legend class="sr-only">Carreras destinatarias principales</legend>
+                        <div data-career-options class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                            @foreach ($recipientUnits->filter(fn ($unit) => $unit->type === App\Enums\OrganizationalUnitType::CAREER) as $unit)
+                                @php $existingUnitRecipient = $document->recipients->first(fn ($recipient) => $recipient->user_id === null && $recipient->unit_id === $unit->id); @endphp
+                                <label data-career-option class="flex min-h-12 items-start gap-3 rounded-lg border border-slate-200 bg-white px-3 py-3 text-sm text-slate-900 {{ $existingUnitRecipient ? 'opacity-70' : 'cursor-pointer hover:border-blue-500' }}">
+                                    <input type="checkbox" data-career-choice data-career-name="{{ $unit->name }}" value="{{ $unit->id }}" @checked($existingUnitRecipient) @disabled($existingUnitRecipient) class="mt-0.5 rounded border-slate-300 text-blue-700 focus:ring-blue-600">
+                                    <span><span class="font-bold">{{ $unit->acronym }}</span> · {{ $unit->name }}@if ($existingUnitRecipient)<span class="block text-xs text-slate-600">{{ $existingUnitRecipient->requires_response ? 'Ya es destinatario principal' : 'Ya está como copia; cambie su finalidad arriba' }}</span>@endif</span>
+                                </label>
+                            @endforeach
+                        </div>
+                    </fieldset>
+                    <p data-career-selection-count aria-live="polite" class="mt-4 text-sm font-semibold text-slate-800">0 carreras seleccionadas.</p>
+                    <button type="submit" data-career-submit disabled class="ft-button-primary mt-4 disabled:cursor-not-allowed disabled:opacity-50">Agregar carreras seleccionadas</button>
                 </form>
+                <noscript>
+                    <form method="POST" action="{{ route('documents.recipients.store', $document) }}" class="mt-4 rounded-xl border border-slate-200 p-4">
+                        @csrf
+                        <input type="hidden" name="recipient_type" value="unit">
+                        <input type="hidden" name="requires_response" value="1">
+                        <input type="hidden" name="lock_version" value="{{ $document->lock_version }}">
+                        <label for="single_career" class="block text-sm font-bold">Agregar una carrera sin JavaScript</label>
+                        <select id="single_career" name="unit_id" required class="mt-2 block min-h-11 w-full rounded-lg border-slate-300">
+                            <option value="">Seleccione una carrera</option>
+                            @foreach ($recipientUnits->filter(fn ($unit) => $unit->type === App\Enums\OrganizationalUnitType::CAREER) as $unit)
+                                <option value="{{ $unit->id }}">{{ $unit->acronym }} · {{ $unit->name }}</option>
+                            @endforeach
+                        </select>
+                        <button type="submit" class="ft-button-primary mt-4">Agregar carrera</button>
+                    </form>
+                </noscript>
+            </div>
 
-                <form method="POST" action="{{ route('documents.recipients.store', $document) }}" class="rounded-xl border border-slate-200 p-4">
-                    @csrf
-                    <input type="hidden" name="recipient_type" value="person">
-                    <input type="hidden" name="lock_version" value="{{ $document->lock_version }}">
-                    <h3 class="font-bold text-slate-900">Enviar a una persona específica</h3>
-                    <p class="mt-1 text-xs leading-5 text-slate-600">Jefatura y Secretaría pueden recibir trámites formales. Auxiliares solo pueden agregarse como copia informativa. Los usuarios Extra no se muestran.</p>
-
-                    <label for="recipient_user_id" class="mt-4 block text-sm font-bold text-slate-800">Persona</label>
-                    <select id="recipient_user_id" name="user_id" required data-personal-recipient-select class="mt-2 block min-h-11 w-full rounded-lg border-slate-300 shadow-sm focus:border-blue-600 focus:ring-blue-600">
-                        <option value="">Seleccione una opción</option>
-                        @foreach ($recipientUsers as $user)
-                            <option
-                                value="{{ $user->id }}"
-                                data-can-require-response="{{ $user->roleName()?->canBeFormalPersonalDocumentRecipient() ? '1' : '0' }}"
-                            >{{ $user->name }} — {{ $user->roleName()?->label() }} · {{ $user->organizationalUnit->name }}</option>
-                        @endforeach
-                    </select>
-
-                    <label for="person_requires_response" class="mt-4 block text-sm font-bold text-slate-800">Finalidad</label>
-                    <select id="person_requires_response" name="requires_response" required data-personal-recipient-purpose class="mt-2 block min-h-11 w-full rounded-lg border-slate-300 shadow-sm focus:border-blue-600 focus:ring-blue-600">
-                        <option value="1">Requiere respuesta</option>
-                        <option value="0">Copia informativa</option>
-                    </select>
-                    <p data-personal-recipient-help hidden class="mt-2 text-xs font-semibold text-amber-700">El Auxiliar solo puede seleccionarse como copia informativa.</p>
-
-                    <button type="submit" class="ft-button-primary mt-4 w-full">Agregar persona</button>
-                </form>
+            <div class="mt-6 border-t border-slate-200 pt-6">
+                <h3 class="text-base font-bold text-slate-950">Copia informativa <span class="text-sm font-normal text-slate-500">· Opcional</span></h3>
+                <p class="mt-1 text-sm text-slate-600">Estas personas o unidades recibirán el documento solo para conocimiento. No necesitan aprobarlo ni responderlo.</p>
+                <details class="mt-4 rounded-xl border border-slate-200 p-4">
+                    <summary class="cursor-pointer font-bold text-blue-800">+ Agregar copia informativa</summary>
+                    <div class="mt-4 grid gap-5 border-t border-slate-200 pt-4 lg:grid-cols-2">
+                        <form method="POST" action="{{ route('documents.recipients.store', $document) }}" data-recipient-operation="add-copy">
+                            @csrf
+                            <input type="hidden" name="recipient_type" value="unit">
+                            <input type="hidden" name="requires_response" value="0">
+                            <input type="hidden" name="lock_version" value="{{ $document->lock_version }}">
+                            <label for="copy_unit_id" class="block text-sm font-bold text-slate-800">Carrera o Kardex</label>
+                            <select id="copy_unit_id" name="unit_id" data-copy-unit-options required class="mt-2 block min-h-11 w-full rounded-lg border-slate-300">
+                                <option value="">Seleccione una unidad</option>
+                                @foreach ($recipientUnits as $unit)
+                                    <option value="{{ $unit->id }}" @disabled($document->recipients->contains(fn ($recipient) => $recipient->user_id === null && $recipient->unit_id === $unit->id))>{{ $unit->acronym }} · {{ $unit->name }}</option>
+                                @endforeach
+                            </select>
+                            <button type="submit" class="ft-button-secondary mt-3">Agregar copia de unidad</button>
+                        </form>
+                        <form method="POST" action="{{ route('documents.recipients.store', $document) }}" data-recipient-operation="add-copy">
+                            @csrf
+                            <input type="hidden" name="recipient_type" value="person">
+                            <input type="hidden" name="requires_response" value="0">
+                            <input type="hidden" name="lock_version" value="{{ $document->lock_version }}">
+                            <label for="copy_user_id" class="block text-sm font-bold text-slate-800">Persona específica</label>
+                            <select id="copy_user_id" name="user_id" data-copy-person-options required class="mt-2 block min-h-11 w-full rounded-lg border-slate-300">
+                                <option value="">Seleccione una persona</option>
+                                @foreach ($recipientUsers as $user)
+                                    <option value="{{ $user->id }}" @disabled($document->recipients->contains(fn ($recipient) => $recipient->user_id === $user->id))>{{ $user->name }} · {{ $user->organizationalUnit->name }}</option>
+                                @endforeach
+                            </select>
+                            <button type="submit" class="ft-button-secondary mt-3">Agregar copia de persona</button>
+                        </form>
+                    </div>
+                </details>
             </div>
         @endif
+        @endunless
     </section>
 
     @if ($document->general_status === App\Enums\DocumentStatus::RETURNED)
@@ -349,16 +587,16 @@
         </section>
     @endif
 
-    <section class="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7" aria-labelledby="files-title">
-        <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-                <h2 id="files-title" class="text-lg font-bold text-slate-950">Archivos adjuntos</h2>
-                <p class="mt-1 text-sm leading-6 text-slate-600">Los archivos se conservan en almacenamiento privado y solo se descargan con autorización.</p>
-            </div>
-            <span class="inline-flex w-fit rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-800">
-                {{ $document->versions->sum(fn ($version) => $version->files->count()) }} archivos
-            </span>
-        </div>
+    @if ($isDraft)
+        <section class="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7" aria-labelledby="files-title">
+            <h2 id="files-title" class="text-lg font-bold text-slate-950">Archivos adjuntos</h2>
+    @else
+        <details class="ft-card mt-6 p-5 sm:p-7">
+            <summary id="files-title" class="flex min-h-8 items-center justify-between gap-3 text-lg font-bold text-slate-950">
+                Archivos adjuntos <span class="shrink-0 text-xs font-semibold text-slate-600">{{ $documentFiles->count() }} {{ $documentFiles->count() === 1 ? 'archivo' : 'archivos' }}</span>
+            </summary>
+    @endif
+        <p class="mt-2 text-sm leading-6 text-slate-600">Revise el contenido antes de enviar o tomar una decisión. La visualización y descarga requieren autorización.</p>
 
         @forelse ($document->versions->sortByDesc('version_number') as $version)
             <div class="mt-5 overflow-hidden rounded-xl border border-slate-200">
@@ -384,9 +622,7 @@
                                 <p class="mt-1 text-xs text-slate-500">{{ strtoupper($file->extension) }} · {{ $displaySize }} · {{ $file->created_at->format('d/m/Y H:i') }} · {{ $file->uploader->name }}</p>
                             </div>
                             <div class="flex flex-wrap gap-2">
-                                @can('downloadFile', $document)
-                                    <a href="{{ route('documents.files.download', [$document, $file]) }}" class="inline-flex min-h-10 items-center rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50">Descargar</a>
-                                @endcan
+                                @include('documents.partials.file-actions', ['file' => $file])
                                 @if ($canManageFiles)
                                     <form method="POST" action="{{ route('documents.files.destroy', [$document, $file]) }}" onsubmit="return confirm('¿Retirar este archivo del borrador?');">
                                         @csrf
@@ -401,11 +637,11 @@
                 </ul>
             </div>
         @empty
-            <div class="mt-5 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center text-sm text-slate-600">Este borrador todavía no tiene archivos adjuntos.</div>
+            <div class="mt-5 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center text-sm text-slate-600">{{ $isDraft ? 'Este borrador todavía no tiene archivos adjuntos.' : 'Este documento no tiene archivos adjuntos.' }}</div>
         @endforelse
 
         @if ($canManageFiles)
-            <form method="POST" action="{{ route('documents.files.store', $document) }}" enctype="multipart/form-data" class="mt-6 border-t border-slate-200 pt-6">
+            <form method="POST" action="{{ route('documents.files.store', $document) }}" enctype="multipart/form-data" class="mt-6 border-t border-slate-200 pt-6" data-submit-label="Adjuntando archivos…">
                 @csrf
                 <input type="hidden" name="lock_version" value="{{ $document->lock_version }}">
                 <label for="document_files" class="block text-sm font-bold text-slate-800">Seleccionar archivos</label>
@@ -417,25 +653,34 @@
                     required
                     accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.zip"
                     class="mt-2 block min-h-11 w-full rounded-lg border border-slate-300 bg-white text-sm text-slate-700 file:mr-4 file:min-h-11 file:border-0 file:bg-slate-100 file:px-4 file:py-2.5 file:font-bold file:text-slate-700 hover:file:bg-slate-200"
-                    aria-describedby="document-files-help"
+                    aria-invalid="{{ $errors->has('files') || $errors->has('files.*') ? 'true' : 'false' }}"
+                    aria-describedby="document-files-help{{ $errors->has('files') || $errors->has('files.*') ? ' document-files-error' : '' }}"
                 >
                 <p id="document-files-help" class="mt-2 text-xs leading-5 text-slate-600">
                     Máximo {{ config('documents.uploads.max_files_per_request') }} archivos por carga y {{ config('documents.uploads.max_size_kb') / 1024 }} MB por archivo. Formatos: PDF, Word, Excel, PowerPoint, JPG, PNG y ZIP.
+                    Si la carga falla, seleccione los archivos nuevamente antes de reintentar.
                 </p>
+                @if ($errors->has('files') || $errors->has('files.*'))<p id="document-files-error" class="ft-field-error">{{ $errors->first('files') ?: $errors->first('files.*') }}</p>@endif
                 <button type="submit" class="ft-button-primary mt-4">Adjuntar archivos</button>
             </form>
         @endif
-    </section>
+    @if ($isDraft)
+        </section>
+    @else
+        </details>
+    @endif
 
     @if ($canManageAccessGrants)
-        <section class="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7" aria-labelledby="access-grants-title">
-            <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                    <h2 id="access-grants-title" class="text-lg font-bold text-slate-950">Accesos explícitos</h2>
-                    <p class="mt-1 max-w-3xl text-sm leading-6 text-slate-600">Permiten consultar este documento sin convertir al usuario en destinatario ni participante del flujo.</p>
-                </div>
-                <span class="inline-flex w-fit rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-800">{{ $activeAccessGrants->count() }} {{ $activeAccessGrants->count() === 1 ? 'acceso activo' : 'accesos activos' }}</span>
-            </div>
+        @if ($isDraft)
+            <section class="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7" aria-labelledby="access-grants-title">
+                <h2 id="access-grants-title" class="text-lg font-bold text-slate-950">Accesos explícitos</h2>
+        @else
+            <details class="ft-card mt-6 p-5 sm:p-7">
+                <summary id="access-grants-title" class="flex min-h-8 items-center justify-between gap-3 text-lg font-bold text-slate-950">
+                    Administrar accesos <span class="shrink-0 text-xs font-semibold text-slate-600">{{ $activeAccessGrants->count() }} {{ $activeAccessGrants->count() === 1 ? 'acceso activo' : 'accesos activos' }}</span>
+                </summary>
+        @endif
+            <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600">Permiten consultar este documento sin convertir al usuario en destinatario ni participante del flujo.</p>
 
             @if ($document->confidentiality === App\Enums\DocumentConfidentiality::RESTRICTED)
                 <div class="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-950">
@@ -520,20 +765,40 @@
                     <p class="mt-2 text-xs font-semibold text-slate-600">No hay usuarios Extra activos y disponibles dentro de su ámbito.</p>
                 @endif
             </form>
-        </section>
+        @if ($isDraft)
+            </section>
+        @else
+            </details>
+        @endif
     @endif
 
     @can('send', $document)
         <section class="mt-6 rounded-2xl border border-blue-200 bg-blue-50 p-5 sm:p-7" aria-labelledby="send-title">
-            <h2 id="send-title" class="text-lg font-bold text-blue-950">Enviar documento oficialmente</h2>
+            <h2 id="send-title" class="text-lg font-bold text-blue-950">Listo para enviar</h2>
             <p class="mt-2 text-sm leading-6 text-blue-900">Revise el resumen antes de enviar. Esta acción asignará el código institucional y volverá inmutables los destinatarios y archivos de esta entrega.</p>
-            <dl class="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
+            <dl data-recipient-send-summary class="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
                 <div><dt class="font-bold text-blue-950">Origen</dt><dd class="text-blue-900">{{ $document->originUnit->name }}</dd></div>
                 <div><dt class="font-bold text-blue-950">Tipo</dt><dd class="text-blue-900">{{ $document->documentType->name }}</dd></div>
                 <div><dt class="font-bold text-blue-950">Asunto</dt><dd class="text-blue-900">{{ $document->subject }}</dd></div>
-                <div><dt class="font-bold text-blue-950">Destinatarios</dt><dd class="text-blue-900">{{ $document->recipients->count() }}</dd></div>
+                <div><dt class="font-bold text-blue-950">Destinatarios principales</dt><dd class="text-blue-900">{{ $mainRecipients->map(fn ($recipient) => $recipient->user?->name ?? $recipient->unit->name)->join(', ') ?: 'Ninguno' }}</dd></div>
+                <div><dt class="font-bold text-blue-950">Copias informativas</dt><dd class="text-blue-900">{{ $copyRecipients->map(fn ($recipient) => $recipient->user?->name ?? $recipient->unit->name)->join(', ') ?: 'Ninguna' }}</dd></div>
                 <div><dt class="font-bold text-blue-950">Archivos</dt><dd class="text-blue-900">{{ $document->versions->sum(fn ($version) => $version->files->count()) }}</dd></div>
             </dl>
+            <div class="mt-4 rounded-xl bg-white p-4">
+                <h3 class="text-sm font-bold text-slate-950">Archivos que enviará</h3>
+                <ul class="mt-3 space-y-3">
+                    @forelse ($documentFiles as $file)
+                        <li class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                            <span class="min-w-0 break-words text-sm font-semibold text-slate-800">{{ $file->original_name }}</span>
+                            <div class="flex shrink-0 flex-wrap gap-2">@include('documents.partials.file-actions', ['file' => $file])</div>
+                        </li>
+                    @empty
+                        <li class="text-sm text-slate-600">Este documento se enviará sin archivos adjuntos.</li>
+                    @endforelse
+                </ul>
+            </div>
+            <div data-recipient-send-controls>
+            <a href="{{ route('documents.edit', $document) }}" class="ft-button-secondary mt-4">Volver y corregir</a>
             <form method="POST" action="{{ route('documents.send', $document) }}" class="mt-5" onsubmit="return confirm('¿Confirma el envío oficial de este documento? Se asignará un código y ya no podrá modificar destinatarios ni archivos.');">
                 @csrf
                 <input type="hidden" name="document_lock_version" value="{{ $document->lock_version }}">
@@ -542,6 +807,7 @@
             @if ($document->recipients->isEmpty())
                 <p class="mt-2 text-xs font-semibold text-red-700">Debe agregar al menos un destinatario antes de enviar.</p>
             @endif
+            </div>
         </section>
     @endcan
 
@@ -565,14 +831,18 @@
         </section>
     @endcan
 
-    <section class="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7" aria-labelledby="history-title">
-        <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-                <h2 id="history-title" class="text-lg font-bold text-slate-950">Historial documental</h2>
-                <p class="mt-1 text-sm leading-6 text-slate-600">Línea de tiempo inmutable, ordenada desde el evento más reciente.</p>
-            </div>
-            <span class="inline-flex w-fit rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-800">{{ $history->total() }} {{ $history->total() === 1 ? 'evento' : 'eventos' }}</span>
-        </div>
+    @if ($isDraft)
+        <section class="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7" aria-labelledby="history-title">
+            <h2 id="history-title" class="text-lg font-bold text-slate-950">Historial documental</h2>
+    @else
+        <details data-document-history @if (request()->filled('historial')) open @endif class="ft-card mt-6 p-5 sm:p-7">
+            <summary id="history-title" class="flex min-h-8 items-center justify-between gap-3 text-lg font-bold text-slate-950">
+                Historial documental <span class="shrink-0 text-xs font-semibold text-slate-600">{{ $history->total() }} {{ $history->total() === 1 ? 'evento' : 'eventos' }}</span>
+            </summary>
+            <p class="mt-2 text-sm text-slate-600">Abra esta sección para consultar la trazabilidad completa.</p>
+    @endif
+
+        <div class="mt-5">
 
         @forelse ($history as $event)
             <article class="relative ml-3 border-l-2 border-slate-200 pb-7 pl-7 last:pb-0">
@@ -618,10 +888,15 @@
             <div class="mt-5 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center text-sm text-slate-600">Todavía no existen eventos documentales.</div>
         @endforelse
 
-        @if ($history->hasPages())
-            <div class="mt-6 border-t border-slate-200 pt-5">{{ $history->links() }}</div>
-        @endif
-    </section>
+            @if ($history->hasPages())
+                <div class="mt-6 border-t border-slate-200 pt-5">{{ $history->fragment('history-title')->links() }}</div>
+            @endif
+        </div>
+    @if ($isDraft)
+        </section>
+    @else
+        </details>
+    @endif
 
     @can('discardDraft', $document)
         <section class="mt-6 rounded-2xl border border-red-200 bg-red-50 p-5" aria-labelledby="discard-title">
@@ -634,4 +909,7 @@
             </form>
         </section>
     @endcan
+    @if ($canObtainFiles && $documentFiles->isNotEmpty())
+        @include('documents.partials.file-viewer')
+    @endif
 </x-layouts.authenticated>

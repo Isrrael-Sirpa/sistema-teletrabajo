@@ -6,6 +6,7 @@ use App\Enums\DocumentRecipientStatus;
 use App\Enums\DocumentStatus;
 use App\Enums\PermissionName;
 use App\Enums\RoleName;
+use App\Enums\UserStatus;
 use App\Models\Document;
 use App\Models\DocumentAccessGrant;
 use App\Models\DocumentRecipient;
@@ -191,7 +192,7 @@ class DocumentPolicy
             && $recipient->document_id === $document->getKey()
             && $recipient->status === DocumentRecipientStatus::SENT
             && $this->hasCapability($user, PermissionName::DOCUMENTS_RECEIVE, $recipient->unit_id)
-            && $this->canActForRecipient($user, $recipient, false, PermissionName::DOCUMENTS_RECEIVE);
+            && $this->canActForRecipient($user, $recipient, PermissionName::DOCUMENTS_RECEIVE);
     }
 
     public function reviewRecipient(User $user, Document $document, DocumentRecipient $recipient): bool
@@ -201,7 +202,7 @@ class DocumentPolicy
             && $recipient->requires_response
             && $recipient->status === DocumentRecipientStatus::RECEIVED
             && $this->hasCapability($user, PermissionName::DOCUMENTS_REVIEW, $recipient->unit_id)
-            && $this->canActForRecipient($user, $recipient, true, PermissionName::DOCUMENTS_REVIEW);
+            && $this->canActForRecipient($user, $recipient, PermissionName::DOCUMENTS_REVIEW);
     }
 
     public function approveRecipient(User $user, Document $document, DocumentRecipient $recipient): bool
@@ -250,31 +251,27 @@ class DocumentPolicy
             && $recipient->requires_response
             && in_array($recipient->status, $allowedStatuses, true)
             && $this->hasCapability($user, $permission, $recipient->unit_id)
-            && $this->canActForRecipient($user, $recipient, false, $permission);
+            && $this->canActForRecipient($user, $recipient, $permission);
     }
 
     private function canActForRecipient(
         User $user,
         DocumentRecipient $recipient,
-        bool $allowAssistant,
         PermissionName $permission,
     ): bool {
-        if ($user->hasInstitutionalGlobalScope()) {
-            return true;
+        if ($user->status !== UserStatus::ACTIVE || ! $user->hasAnyRole([
+            RoleName::CAREER_HEAD->value,
+            RoleName::SECRETARY->value,
+        ])) {
+            return false;
         }
 
         if ($recipient->user_id !== null) {
-            return $recipient->user_id === $user->getKey();
+            return $recipient->user_id === $user->getKey()
+                && $recipient->unit_id === $user->organizational_unit_id;
         }
 
-        $roles = [RoleName::CAREER_HEAD->value, RoleName::SECRETARY->value];
-
-        if ($allowAssistant) {
-            $roles[] = RoleName::SECRETARY_ASSISTANT->value;
-        }
-
-        return ($recipient->unit_id === $user->organizational_unit_id
-            && $user->hasAnyRole($roles))
+        return $recipient->unit_id === $user->organizational_unit_id
             || $this->delegations->can($user, $permission, $recipient->unit_id);
     }
 

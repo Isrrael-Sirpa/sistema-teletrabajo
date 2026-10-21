@@ -71,9 +71,29 @@ class PostgreSqlDocumentFileTest extends TestCase
         }
 
         $this->assertSame(1, DocumentVersion::query()->where('document_id', $document->id)->count());
-        $this->assertSame(1, DocumentFile::query()->count());
+        $this->assertSame(1, DocumentFile::query()->whereHas('documentVersion', fn ($query) => $query->where('document_id', $document->id))->count());
         $this->assertCount(1, Storage::disk('documents')->allFiles());
         $this->assertSame(1, $document->fresh()->lock_version);
+    }
+
+    public function test_postgresql_private_preview_is_authorized_and_audited_without_changing_document(): void
+    {
+        [$document, $creator] = $this->authorizedDocumentContext();
+        [$file] = app(DocumentFileService::class)->upload($creator, $document, [
+            $this->uploadedPdf('visor.pdf', "%PDF-1.4\nVisor PostgreSQL"),
+        ], 0);
+        $before = $document->fresh()->getAttributes();
+
+        $this->actingAs($creator)->get(route('documents.files.download', [$document, $file, 'presentation' => 'inline']))
+            ->assertOk()->assertHeader('Content-Type', 'application/pdf')
+            ->assertHeader('X-Frame-Options', 'SAMEORIGIN')
+            ->assertHeader('Content-Disposition', 'inline; filename=visor.pdf')
+            ->assertStreamedContent("%PDF-1.4\nVisor PostgreSQL");
+        $this->assertSame($before, $document->fresh()->getAttributes());
+        $this->assertDatabaseHas('audit_logs', [
+            'actor_id' => $creator->id, 'action' => 'files.downloaded', 'auditable_id' => $file->id,
+            'auditable_type' => DocumentFile::class,
+        ]);
     }
 
     public function test_postgresql_enforces_version_number_size_and_hash_checks(): void

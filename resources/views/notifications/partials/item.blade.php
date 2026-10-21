@@ -21,7 +21,7 @@
             <time datetime="{{ $occurredAt->toIso8601String() }}" class="mt-2 block text-xs font-semibold text-slate-500">{{ $occurredAt->format('d/m/Y H:i:s') }}</time>
         </div>
 
-        <div class="flex shrink-0 flex-wrap gap-2">
+        <div class="flex shrink-0 flex-wrap gap-2 sm:max-w-60 sm:justify-end">
             @if ($documentUrl)
                 <a href="{{ $documentUrl }}" class="ft-button-primary">Abrir documento</a>
             @endif
@@ -29,7 +29,7 @@
                 <form method="POST" action="{{ route('notifications.read', $notification->id) }}">
                     @csrf
                     @method('PATCH')
-                    <button type="submit" class="inline-flex min-h-10 items-center rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50">Marcar como leída</button>
+                    <button type="submit" class="ft-button-secondary">Marcar como leída</button>
                 </form>
             @endif
         </div>

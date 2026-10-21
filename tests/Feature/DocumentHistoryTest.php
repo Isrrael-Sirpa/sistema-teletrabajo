@@ -302,6 +302,19 @@ class DocumentHistoryTest extends TestCase
         $this->actingAs($extra)->get(route('documents.show', $document))->assertForbidden();
     }
 
+    public function test_sent_history_pagination_keeps_the_section_open_and_anchored(): void
+    {
+        [$document, $career, $owner] = $this->context();
+        for ($number = 1; $number <= 18; $number++) {
+            app(DocumentEventService::class)->record($document, DocumentEventType::DRAFT_UPDATED, $owner, metadata: ['changed_fields' => ['campo '.$number]]);
+        }
+        $document->forceFill(['general_status' => DocumentStatus::SENT, 'sent_at' => now(), 'code' => 'FTEC-HISTORY-2026-000001'])->save();
+
+        $response = $this->actingAs($owner)->get(route('documents.show', $document, false).'?historial=2');
+        $response->assertOk()->assertSee('historial=1#history-title', false);
+        $this->assertMatchesRegularExpression('/<details[^>]*data-document-history[^>]*\sopen(?:\s|>)/', $response->getContent());
+    }
+
     /** @return array{Document, OrganizationalUnit, User} */
     private function context(): array
     {

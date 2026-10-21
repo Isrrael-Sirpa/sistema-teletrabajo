@@ -214,7 +214,7 @@ class PostgreSqlDocumentWorkflowTest extends TestCase
                 'Anulación concurrente PostgreSQL.',
             ]),
             $this->startWorker($worker, $barrier, [
-                'transition', $administrator->id, $document->id, $recipient->id, 'approve',
+                'transition', $creator->id, $document->id, $recipient->id, 'approve',
                 $documentVersion, $recipientVersion, '',
             ]),
         ];

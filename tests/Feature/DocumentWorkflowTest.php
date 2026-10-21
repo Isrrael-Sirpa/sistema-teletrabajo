@@ -7,6 +7,7 @@ use App\Enums\DocumentPriority;
 use App\Enums\DocumentRecipientStatus;
 use App\Enums\DocumentStatus;
 use App\Enums\DocumentTransition;
+use App\Enums\PermissionName;
 use App\Enums\RoleName;
 use App\Models\Document;
 use App\Models\DocumentCounter;
@@ -161,6 +162,122 @@ class DocumentWorkflowTest extends TestCase
         $this->assertNotSame($origin->id, $destination->id);
     }
 
+    public function test_sender_sees_compact_tracking_instead_of_destination_controls_after_send(): void
+    {
+        [$document, , $creator] = $this->draftContext();
+        $destination = $this->career();
+        $this->recipient($document, $destination);
+        $this->send($creator, $document)->assertRedirect();
+
+        $this->actingAs($creator)->get(route('documents.show', $document))
+            ->assertOk()
+            ->assertSee('SEGUIMIENTO DEL DOCUMENTO')
+            ->assertSee('Documento enviado.')
+            ->assertSee('Por ahora no necesita realizar ninguna acción.')
+            ->assertSee('Seguimiento por destinatario')
+            ->assertSee($destination->name)
+            ->assertSee('Esperando recepción.')
+            ->assertSee('Ver archivos')
+            ->assertSee('Ver historial')
+            ->assertDontSee('Recibir documento')
+            ->assertDontSee('Iniciar revisión')
+            ->assertDontSee('Aprobar documento')
+            ->assertDontSee('name="requires_response"', false)
+            ->assertDontSee('Agregar persona');
+    }
+
+    public function test_destination_sees_its_available_action_instead_of_sender_message(): void
+    {
+        [$document, , $creator] = $this->draftContext();
+        $destination = $this->career();
+        $receiver = $this->userWithRole(RoleName::SECRETARY, $destination);
+        $this->recipient($document, $destination);
+        $this->send($creator, $document)->assertRedirect();
+
+        $this->actingAs($receiver)->get(route('documents.show', $document))
+            ->assertOk()
+            ->assertSee('DOCUMENTO PARA SU ATENCIÓN')
+            ->assertSee('Nuevo documento')
+            ->assertSee('Este documento fue enviado a su carrera.')
+            ->assertSee('Recibir documento')
+            ->assertDontSee('Por ahora no necesita realizar ninguna acción.')
+            ->assertDontSee('Iniciar revisión')
+            ->assertDontSee('Aprobar documento');
+    }
+
+    public function test_personal_main_recipient_and_unit_copy_have_distinct_actions_and_visibility(): void
+    {
+        [$document, , $creator] = $this->draftContext();
+        $destination = $this->career();
+        $head = $this->userWithRole(RoleName::CAREER_HEAD, $destination);
+        $secretary = $this->userWithRole(RoleName::SECRETARY, $destination);
+        $this->recipient($document, $destination, true, $head);
+        $this->recipient($document, $destination, false);
+        $this->send($creator, $document)->assertRedirect();
+
+        $headPage = $this->actingAs($head)->get(route('documents.show', $document))->assertOk()
+            ->assertSee('DOCUMENTO PARA SU ATENCIÓN')
+            ->assertSee('Destinatarios principales')
+            ->assertSee('Copias informativas')
+            ->assertSee('Registrar recepción de copia');
+        $this->assertSame(1, substr_count($headPage->getContent(), '>Recibir documento</button>'));
+
+        $this->actingAs($secretary)->get(route('documents.show', $document))->assertOk()
+            ->assertSee('COPIA INFORMATIVA')
+            ->assertSee('No necesita aprobarlo ni responderlo.')
+            ->assertSee('Registrar recepción de copia')
+            ->assertDontSee('>Recibir documento</button>', false)
+            ->assertDontSee('>Iniciar revisión</button>', false)
+            ->assertDontSee('>Aprobar documento</button>', false);
+    }
+
+    public function test_sender_sees_returned_recipient_as_an_actionable_exception(): void
+    {
+        [$document, , $creator] = $this->draftContext();
+        $destination = $this->career();
+        $receiver = $this->userWithRole(RoleName::CAREER_HEAD, $destination);
+        $recipient = $this->recipient($document, $destination);
+        $this->send($creator, $document)->assertRedirect();
+        $this->transition($receiver, $document, $recipient, 'receive')->assertRedirect();
+        $this->transition($receiver, $document, $recipient, 'start_review')->assertRedirect();
+        $this->transition($receiver, $document, $recipient, 'return', 'Falta una firma')->assertRedirect();
+
+        $this->actingAs($creator)->get(route('documents.show', $document))
+            ->assertOk()
+            ->assertSee('Este documento requiere su atención.')
+            ->assertSee('Falta una firma')
+            ->assertSee('Ver observaciones')
+            ->assertSee('Preparar corrección')
+            ->assertDontSee('Aprobar documento');
+    }
+
+    public function test_tracking_summarizes_independent_progress_for_multiple_destinations(): void
+    {
+        [$document, , $creator] = $this->draftContext();
+        $approvedUnit = $this->career();
+        $reviewUnit = $this->career();
+        $waitingUnit = $this->career();
+        $approvedActor = $this->userWithRole(RoleName::CAREER_HEAD, $approvedUnit);
+        $reviewActor = $this->userWithRole(RoleName::CAREER_HEAD, $reviewUnit);
+        $approvedRecipient = $this->recipient($document, $approvedUnit);
+        $reviewRecipient = $this->recipient($document, $reviewUnit);
+        $this->recipient($document, $waitingUnit);
+        $this->send($creator, $document)->assertRedirect();
+        $this->receiveReviewApprove($approvedActor, $document, $approvedRecipient);
+        $this->transition($reviewActor, $document, $reviewRecipient, 'receive')->assertRedirect();
+        $this->transition($reviewActor, $document, $reviewRecipient, 'start_review')->assertRedirect();
+
+        $this->actingAs($creator)->get(route('documents.show', $document))
+            ->assertOk()
+            ->assertSee('3 carreras')
+            ->assertSee('1 aprobó')
+            ->assertSee('1 en revisión')
+            ->assertSee('1 espera recepción')
+            ->assertSee($approvedUnit->name)
+            ->assertSee($reviewUnit->name)
+            ->assertSee($waitingUnit->name);
+    }
+
     public function test_only_head_or_secretary_of_unit_can_receive_unit_recipient(): void
     {
         [$document, , $creator] = $this->draftContext();
@@ -189,7 +306,7 @@ class DocumentWorkflowTest extends TestCase
         $this->assertSame($head->id, $headRecipient->fresh()->received_by);
     }
 
-    public function test_personal_recipient_is_strict_but_global_administrator_can_supervise(): void
+    public function test_personal_recipient_is_strict_and_global_administrator_cannot_receive(): void
     {
         [$document, , $creator] = $this->draftContext();
         $destination = $this->career();
@@ -200,9 +317,10 @@ class DocumentWorkflowTest extends TestCase
         $this->send($creator, $document);
 
         $this->transition($sameUnitHead, $document, $recipient, 'receive')->assertForbidden();
-        $this->transition($administrator, $document, $recipient, 'receive')->assertRedirect();
+        $this->transition($administrator, $document, $recipient, 'receive')->assertForbidden();
+        $this->transition($person, $document, $recipient, 'receive')->assertRedirect();
 
-        $this->assertSame($administrator->id, $recipient->fresh()->received_by);
+        $this->assertSame($person->id, $recipient->fresh()->received_by);
     }
 
     public function test_received_document_can_enter_review_and_authorized_actor_can_approve(): void
@@ -273,7 +391,7 @@ class DocumentWorkflowTest extends TestCase
         $this->assertDatabaseCount('document_counters', 0);
     }
 
-    public function test_assistant_can_review_but_cannot_approve_and_extra_cannot_transition(): void
+    public function test_assistant_cannot_start_formal_review_or_approve_and_extra_cannot_transition(): void
     {
         [$document, , $creator] = $this->draftContext();
         $destination = $this->career();
@@ -285,10 +403,96 @@ class DocumentWorkflowTest extends TestCase
         $this->transition($secretary, $document, $recipient, 'receive');
 
         $this->actingAs($extra)->get(route('documents.show', $document))->assertForbidden();
-        $this->transition($assistant, $document, $recipient, 'start_review')->assertRedirect();
+        $this->transition($assistant, $document, $recipient, 'start_review')->assertForbidden();
         $this->transition($assistant, $document, $recipient, 'approve')->assertForbidden();
         $this->transition($extra, $document, $recipient, 'approve')->assertForbidden();
-        $this->assertSame(DocumentRecipientStatus::IN_REVIEW, $recipient->fresh()->status);
+        $this->assertSame(DocumentRecipientStatus::RECEIVED, $recipient->fresh()->status);
+    }
+
+    public function test_head_and_secretary_can_perform_all_five_formal_actions_for_their_unit(): void
+    {
+        [$firstDocument, , $creator] = $this->draftContext();
+        $destination = $this->career();
+
+        foreach ([RoleName::CAREER_HEAD, RoleName::SECRETARY] as $role) {
+            $actor = $this->userWithRole($role, $destination);
+
+            foreach (DocumentTransition::cases() as $action) {
+                $document = $this->draft($creator, $firstDocument->originUnit);
+                $recipient = $this->recipient($document, $destination);
+                $this->send($creator, $document)->assertRedirect();
+                $this->prepareForAction($actor, $document, $recipient, $action);
+
+                $this->transition($actor, $document, $recipient, $action->value, 'Motivo de decisión formal.')
+                    ->assertRedirect()->assertSessionHasNoErrors();
+                $this->assertSame(match ($action) {
+                    DocumentTransition::RECEIVE => DocumentRecipientStatus::RECEIVED,
+                    DocumentTransition::START_REVIEW => DocumentRecipientStatus::IN_REVIEW,
+                    DocumentTransition::APPROVE => DocumentRecipientStatus::APPROVED,
+                    DocumentTransition::RETURN => DocumentRecipientStatus::RETURNED,
+                    DocumentTransition::REJECT => DocumentRecipientStatus::REJECTED,
+                }, $recipient->fresh()->status);
+            }
+        }
+    }
+
+    public function test_formal_actions_reject_non_formal_roles_other_careers_and_inactive_users(): void
+    {
+        [$firstDocument, , $creator] = $this->draftContext();
+        $destination = $this->career();
+        $secretary = $this->userWithRole(RoleName::SECRETARY, $destination);
+        $deniedActors = [];
+
+        foreach ([RoleName::SECRETARY_ASSISTANT, RoleName::EXTRA, RoleName::ADMINISTRATOR, RoleName::CO_ADMINISTRATOR] as $role) {
+            $actor = $this->userWithRole($role, $role->isGlobal() ? null : $destination);
+            // Even direct capabilities must not bypass the institutional role rule.
+            $actor->givePermissionTo([
+                PermissionName::DOCUMENTS_RECEIVE->value, PermissionName::DOCUMENTS_REVIEW->value,
+                PermissionName::DOCUMENTS_APPROVE->value, PermissionName::DOCUMENTS_RETURN->value,
+                PermissionName::DOCUMENTS_REJECT->value,
+            ]);
+            $deniedActors[] = $actor;
+        }
+
+        foreach ([RoleName::CAREER_HEAD, RoleName::SECRETARY] as $role) {
+            $deniedActors[] = $this->userWithRole($role, $this->career());
+            $inactive = $this->userWithRole($role, $destination);
+            $inactive->update(['status' => 'inactive']);
+            $deniedActors[] = $inactive;
+        }
+
+        foreach (DocumentTransition::cases() as $action) {
+            $document = $this->draft($creator, $firstDocument->originUnit);
+            $recipient = $this->recipient($document, $destination);
+            $this->send($creator, $document)->assertRedirect();
+            $this->prepareForAction($secretary, $document, $recipient, $action);
+            $before = $recipient->fresh()->getAttributes();
+            $eventCount = $document->events()->count();
+
+            foreach ($deniedActors as $actor) {
+                $this->transition($actor, $document, $recipient, $action->value, 'No autorizado.')
+                    ->assertForbidden();
+            }
+
+            $this->assertSame($before, $recipient->fresh()->getAttributes());
+            $this->assertSame($eventCount, $document->events()->count());
+        }
+    }
+
+    public function test_formal_authority_rejects_mismatched_recipient_and_wrong_state(): void
+    {
+        [$document, , $creator] = $this->draftContext();
+        $destination = $this->career();
+        $actor = $this->userWithRole(RoleName::SECRETARY, $destination);
+        $recipient = $this->recipient($document, $destination);
+        $otherDocument = $this->draft($creator, $document->originUnit);
+        $this->send($creator, $document);
+
+        $this->transition($actor, $otherDocument, $recipient, 'receive')->assertForbidden();
+        foreach (['start_review', 'approve', 'return', 'reject'] as $action) {
+            $this->transition($actor, $document, $recipient, $action, 'Estado incorrecto.')->assertForbidden();
+        }
+        $this->assertSame(DocumentRecipientStatus::SENT, $recipient->fresh()->status);
     }
 
     public function test_informational_copy_can_be_received_but_cannot_review_or_decide(): void
@@ -473,6 +677,16 @@ class DocumentWorkflowTest extends TestCase
             'lock_version' => 1,
         ])->assertForbidden();
         $this->assertDatabaseCount('document_recipients', 1);
+    }
+
+    private function prepareForAction(User $actor, Document $document, DocumentRecipient $recipient, DocumentTransition $action): void
+    {
+        if ($action !== DocumentTransition::RECEIVE) {
+            $this->transition($actor, $document, $recipient, 'receive')->assertRedirect();
+        }
+        if (in_array($action, [DocumentTransition::APPROVE, DocumentTransition::RETURN, DocumentTransition::REJECT], true)) {
+            $this->transition($actor, $document, $recipient, 'start_review')->assertRedirect();
+        }
     }
 
     private function receiveReviewApprove(User $actor, Document $document, DocumentRecipient $recipient): void

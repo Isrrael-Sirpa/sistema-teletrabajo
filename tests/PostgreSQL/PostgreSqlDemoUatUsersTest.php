@@ -32,6 +32,14 @@ class PostgreSqlDemoUatUsersTest extends TestCase
         }
         $passwordHash = $admin->password;
 
+        // This positive fixture is visible only to this transaction and rolled back
+        // by DatabaseTransactions. Real UAT accounts may legitimately be inactive.
+        User::query()->where('email', 'like', '%@example.test')
+            ->whereIn('organizational_unit_id', OrganizationalUnit::query()->careers()->pluck('id'))
+            ->where('status', UserStatus::INACTIVE->value)
+            ->whereHas('roles', fn ($roles) => $roles->whereIn('name', [RoleName::CAREER_HEAD->value, RoleName::SECRETARY->value]))
+            ->update(['status' => UserStatus::ACTIVE->value]);
+
         $this->assertSame(0, Artisan::call('app:create-demo-uat-users'));
         $this->assertSame(0, Artisan::call('app:create-demo-uat-users'));
         $this->assertSame(18, User::query()->where('email', 'like', '%@example.test')->count());
@@ -46,5 +54,22 @@ class PostgreSqlDemoUatUsersTest extends TestCase
 
         $this->assertSame($passwordHash, $admin->fresh()->password);
         $this->assertTrue($admin->fresh()->hasRole(RoleName::ADMINISTRATOR->value));
+    }
+
+    public function test_postgresql_demo_command_refuses_to_reactivate_an_existing_inactive_account(): void
+    {
+        config(['demo.user_initial_password' => bin2hex(random_bytes(12)).'Aa1!']);
+        $career = OrganizationalUnit::query()->where('name', config('institutional_careers.aeronautica.name'))->sole();
+        $secretary = User::query()->where('organizational_unit_id', $career->id)
+            ->where('email', 'like', '%@example.test')->role(RoleName::SECRETARY->value)->sole();
+        $secretary->update(['status' => UserStatus::INACTIVE]);
+        $before = hash('sha256', $secretary->fresh()->toJson());
+        $userCount = User::query()->count();
+
+        $this->assertSame(1, Artisan::call('app:create-demo-uat-users'));
+        $this->assertStringContainsString('No se creó ninguna carga parcial', Artisan::output());
+        $this->assertSame($before, hash('sha256', $secretary->fresh()->toJson()));
+        $this->assertSame($userCount, User::query()->count());
+        $this->assertSame(UserStatus::INACTIVE, $secretary->fresh()->status);
     }
 }

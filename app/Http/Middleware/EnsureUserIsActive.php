@@ -24,6 +24,8 @@ class EnsureUserIsActive
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
+        abort_if($request->routeIs('documents.recipients.transition'), 403, 'Su cuenta no está activa.');
+
         return redirect()->route('login')->withErrors([
             'email' => 'Su cuenta no está activa. Solicite ayuda al responsable del sistema.',
         ]);

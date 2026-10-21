@@ -1,18 +1,12 @@
 <x-layouts.authenticated :title="$unit->name" :career-unit="$unit->type === App\Enums\OrganizationalUnitType::CAREER ? $unit : null">
     <div class="mx-auto max-w-4xl">
-        <a href="{{ route('units.index') }}" class="text-sm font-semibold text-blue-800 underline-offset-4 hover:underline">← Volver al listado</a>
-
-        @if (session('status'))
-            <div role="status" class="mt-5 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-                {{ session('status') }}
-            </div>
-        @endif
+        <a href="{{ route('units.index') }}" class="ft-button-secondary">← Volver al listado</a>
 
         <section class="mt-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8" aria-labelledby="unit-title">
-            <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div class="ft-page-header">
                 <div>
-                    <p class="text-sm font-semibold text-blue-700">{{ $unit->type->label() }}</p>
-                    <h1 id="unit-title" class="mt-1 text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">{{ $unit->name }}</h1>
+                    <p class="ft-eyebrow">Administración institucional · {{ $unit->type->label() }}</p>
+                    <h1 id="unit-title" class="ft-page-title">{{ $unit->name }}</h1>
                     <p class="mt-2 flex items-center gap-2 text-sm font-medium text-slate-600"><span class="ft-career-dot" aria-hidden="true"></span> Sigla: {{ $unit->acronym }}</p>
                 </div>
                 <span @class([
@@ -24,7 +18,7 @@
 
             <dl class="mt-7 grid gap-6 border-t border-slate-200 pt-6 sm:grid-cols-2">
                 <div>
-                    <dt class="text-sm font-semibold text-slate-700">Unidad padre</dt>
+                    <dt class="text-sm font-semibold text-slate-700">Pertenece a</dt>
                     <dd class="mt-1 text-sm text-slate-600">{{ $unit->parent?->name ?? 'Unidad raíz institucional' }}</dd>
                 </div>
                 <div class="sm:col-span-2">
@@ -34,6 +28,7 @@
             </dl>
 
             @if ($unit->type === App\Enums\OrganizationalUnitType::CAREER)
+                <p class="ft-alert ft-alert-info mt-6">La sigla identifica esta carrera en los códigos de documentos futuros. Modificarla no cambia los códigos ya enviados.</p>
                 <div class="mt-7 flex flex-wrap gap-3 border-t border-slate-200 pt-6">
                     @can('update', $unit)
                         <a href="{{ route('units.edit', $unit) }}" class="ft-button-primary">Editar carrera</a>
@@ -54,8 +49,8 @@
                     @endcan
                 </div>
             @else
-                <p class="mt-7 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm leading-6 text-blue-900">
-                    Esta unidad institucional está protegida y no puede editarse, desactivarse ni eliminarse desde el CRUD ordinario.
+                <p class="ft-alert ft-alert-info mt-7">
+                    Esta unidad institucional está protegida y no puede editarse, desactivarse ni eliminarse desde esta pantalla.
                 </p>
             @endif
         </section>

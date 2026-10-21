@@ -1,12 +1,19 @@
 <x-layouts.authenticated title="Delegaciones temporales">
-    <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+    <header class="ft-page-header">
         <div>
-            <p class="text-sm font-semibold uppercase tracking-wide text-blue-700">Administración</p>
-            <h1 class="mt-1 text-3xl font-bold text-slate-950">Delegaciones temporales</h1>
-            <p class="mt-2 text-sm text-slate-600">Sustituciones de Jefatura con vigencia y capacidades expresas. No modifican roles permanentes.</p>
+            <p class="ft-eyebrow">Continuidad de la atención</p>
+            <h1 class="ft-page-title">Delegaciones temporales</h1>
+            <p class="ft-page-description">Consulte quién atiende temporalmente una Jefatura, durante qué período y con qué funciones autorizadas. No se modifican los roles permanentes.</p>
         </div>
         <a href="{{ route('delegations.create') }}" class="ft-button-primary"><x-ui.icon name="plus" /> Nueva delegación</a>
-    </div>
+    </header>
+
+    @if ($errors->any())
+        <div role="alert" data-form-errors tabindex="-1" class="ft-alert ft-alert-error mt-6">
+            <p class="font-bold">No se pudo completar la solicitud.</p>
+            <ul class="mt-1 list-inside list-disc">@foreach ($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul>
+        </div>
+    @endif
 
     <div class="mt-6 space-y-4">
         @forelse ($items as $delegation)
@@ -20,29 +27,33 @@
                         </div>
                         <dl class="mt-3 grid gap-x-8 gap-y-2 text-sm sm:grid-cols-2">
                             <div><dt class="text-slate-500">Jefe titular</dt><dd class="font-medium">{{ $delegation->delegator->name }}</dd></div>
-                            <div><dt class="text-slate-500">Delegada</dt><dd class="font-medium">{{ $delegation->delegate->name }}</dd></div>
+                            <div><dt class="text-slate-500">Secretaria delegada</dt><dd class="font-medium">{{ $delegation->delegate->name }}</dd></div>
                             <div><dt class="text-slate-500">Inicio</dt><dd>{{ $delegation->starts_at->timezone(config('app.timezone'))->format('d/m/Y H:i') }}</dd></div>
                             <div><dt class="text-slate-500">Finaliza</dt><dd>{{ $delegation->ends_at->timezone(config('app.timezone'))->format('d/m/Y H:i') }}</dd></div>
                             <div><dt class="text-slate-500">Autorizó</dt><dd>{{ $delegation->authorizer->name }}</dd></div>
-                            <div><dt class="text-slate-500">Motivo</dt><dd>{{ $delegation->reason }}</dd></div>
+                            <div><dt class="text-slate-500">Motivo</dt><dd class="break-words">{{ $delegation->reason }}</dd></div>
                         </dl>
-                        <p class="mt-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Capacidades</p>
+                        <p class="mt-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Funciones autorizadas</p>
                         <p class="mt-1 text-sm text-slate-700">{{ $delegation->permissions->pluck('display_name')->join(', ') }}</p>
                     </div>
                     @if (in_array($state, [App\Enums\DelegationState::UPCOMING, App\Enums\DelegationState::ACTIVE], true))
-                        <form method="POST" action="{{ route('delegations.destroy', $delegation) }}" class="w-full max-w-sm rounded-lg border border-red-200 bg-red-50 p-3">
+                        <details class="w-full shrink-0 lg:max-w-xs">
+                            <summary class="flex min-h-11 cursor-pointer items-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Finalizar antes de tiempo</summary>
+                        <form method="POST" action="{{ route('delegations.destroy', $delegation) }}" class="mt-3 rounded-xl border border-red-200 bg-red-50 p-4">
                             @csrf
                             @method('DELETE')
+                            <p class="mb-3 text-sm leading-6 text-red-950">La Secretaria dejará de ejercer las funciones de esta delegación. El registro se conservará.</p>
                             <label class="text-sm font-semibold text-red-950">Motivo de revocación
-                                <textarea name="revocation_reason" required maxlength="2000" rows="2" class="mt-1 w-full rounded-lg border-red-300"></textarea>
+                                <textarea name="revocation_reason" required maxlength="2000" rows="3" class="mt-1 w-full rounded-lg border-red-300"></textarea>
                             </label>
-                            <button class="mt-2 min-h-10 rounded-lg bg-red-800 px-4 py-2 text-sm font-bold text-white">Revocar delegación</button>
+                            <button type="submit" class="mt-3 min-h-11 rounded-lg bg-red-800 px-4 py-2 text-sm font-bold text-white hover:bg-red-900">Revocar delegación</button>
                         </form>
+                        </details>
                     @endif
                 </div>
             </article>
         @empty
-            <div class="ft-card p-10 text-center text-slate-600"><p class="font-bold text-slate-800">No hay delegaciones registradas.</p><p class="mt-1 text-sm">Las sustituciones temporales aparecerán aquí cuando se autoricen.</p></div>
+            <div class="ft-card ft-empty-state"><p class="font-bold text-slate-800">No hay delegaciones registradas.</p><p class="mt-2 text-sm">Si un Jefe necesita una sustitución temporal, registre una delegación con sus fechas y funciones.</p><a href="{{ route('delegations.create') }}" class="ft-button-primary mt-5">Registrar la primera delegación</a></div>
         @endforelse
     </div>
     <div class="mt-6">{{ $items->links() }}</div>

@@ -1,9 +1,9 @@
 <x-layouts.authenticated title="Carreras y unidades">
-    <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+    <div class="ft-page-header">
         <div>
-            <p class="text-sm font-semibold text-blue-700">Administración institucional</p>
-            <h1 class="mt-1 text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">Carreras y unidades</h1>
-            <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+            <p class="ft-eyebrow">Administración institucional</p>
+            <h1 class="ft-page-title">Carreras y unidades</h1>
+            <p class="ft-page-description">
                 La Facultad y Kardex son unidades protegidas. Las carreras pueden agregarse, actualizarse y desactivarse sin eliminar su historial.
             </p>
         </div>
@@ -15,30 +15,53 @@
         @endcan
     </div>
 
-    @if (session('status'))
-        <div role="status" class="mt-6 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-            {{ session('status') }}
+    <form method="GET" action="{{ route('units.index') }}" class="mt-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" aria-label="Filtros de carreras y unidades">
+        <div class="grid gap-4 sm:grid-cols-2">
+            <div>
+                <label for="type" class="block text-sm font-semibold text-slate-800">Tipo de unidad</label>
+                <select id="type" name="type" class="mt-2 block w-full bg-white px-3 py-2 text-sm">
+                    <option value="">Todas las unidades</option>
+                    @foreach (App\Enums\OrganizationalUnitType::cases() as $type)
+                        <option value="{{ $type->value }}" @selected(request('type') === $type->value)>{{ $type->label() }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div>
+                <label for="status" class="block text-sm font-semibold text-slate-800">Estado</label>
+                <select id="status" name="status" class="mt-2 block w-full bg-white px-3 py-2 text-sm">
+                    <option value="">Todos los estados</option>
+                    <option value="active" @selected(request('status') === 'active')>Activa</option>
+                    <option value="inactive" @selected(request('status') === 'inactive')>Inactiva</option>
+                </select>
+            </div>
         </div>
-    @endif
+        <div class="mt-4 flex flex-wrap justify-end gap-2">
+            <a href="{{ route('units.index') }}" class="ft-button-secondary">Limpiar filtros</a>
+            <button type="submit" class="ft-button-primary">Aplicar filtros</button>
+        </div>
+    </form>
 
     <section class="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm" aria-labelledby="units-list-title">
-        <h2 id="units-list-title" class="sr-only">Listado de unidades organizacionales</h2>
-        <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-slate-200">
+        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-5 py-4">
+            <h2 id="units-list-title" class="font-bold text-slate-900">Listado de unidades organizacionales</h2>
+            <p class="text-sm text-slate-600">{{ $units->total() }} {{ $units->total() === 1 ? 'unidad encontrada' : 'unidades encontradas' }}</p>
+        </div>
+        <div class="ft-table-wrap">
+            <table class="ft-data-table min-w-full divide-y divide-slate-200" role="table">
                 <caption class="sr-only">Nombre, sigla, tipo, estado y acciones disponibles de cada unidad.</caption>
-                <thead class="bg-slate-50">
-                    <tr>
-                        <th scope="col" class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wide text-slate-600">Nombre</th>
-                        <th scope="col" class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wide text-slate-600">Sigla</th>
-                        <th scope="col" class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wide text-slate-600">Tipo</th>
-                        <th scope="col" class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wide text-slate-600">Estado</th>
-                        <th scope="col" class="px-5 py-3 text-right text-xs font-bold uppercase tracking-wide text-slate-600">Acciones</th>
+                <thead class="bg-slate-50" role="rowgroup">
+                    <tr role="row">
+                        <th role="columnheader" scope="col" class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wide text-slate-600">Nombre</th>
+                        <th role="columnheader" scope="col" class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wide text-slate-600">Sigla</th>
+                        <th role="columnheader" scope="col" class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wide text-slate-600">Tipo</th>
+                        <th role="columnheader" scope="col" class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wide text-slate-600">Estado</th>
+                        <th role="columnheader" scope="col" class="px-5 py-3 text-right text-xs font-bold uppercase tracking-wide text-slate-600">Acciones</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-200 bg-white">
+                <tbody class="divide-y divide-slate-200 bg-white" role="rowgroup">
                     @forelse ($units as $unit)
-                        <tr>
-                            <td class="px-5 py-4">
+                        <tr role="row">
+                            <td role="cell" data-label="Nombre" class="px-5 py-4">
                                 <a href="{{ route('units.show', $unit) }}" class="font-semibold text-blue-800 underline-offset-4 hover:underline">
                                     @if($unit->type === App\Enums\OrganizationalUnitType::CAREER)<span data-career="{{ $unit->acronym }}" class="ft-career-dot mr-2" aria-hidden="true"></span>@endif{{ $unit->name }}
                                 </a>
@@ -46,9 +69,9 @@
                                     <p class="mt-1 text-xs text-slate-500">Pertenece a {{ $unit->parent->name }}</p>
                                 @endif
                             </td>
-                            <td class="px-5 py-4 text-sm font-bold text-slate-700">{{ $unit->acronym }}</td>
-                            <td class="px-5 py-4 text-sm text-slate-700">{{ $unit->type->label() }}</td>
-                            <td class="px-5 py-4">
+                            <td role="cell" data-label="Sigla" class="px-5 py-4 text-sm font-bold text-slate-700">{{ $unit->acronym }}</td>
+                            <td role="cell" data-label="Tipo" class="px-5 py-4 text-sm text-slate-700">{{ $unit->type->label() }}</td>
+                            <td role="cell" data-label="Estado" class="px-5 py-4">
                                 <span @class([
                                     'inline-flex rounded-full px-2.5 py-1 text-xs font-bold',
                                     'bg-emerald-50 text-emerald-800' => $unit->is_active,
@@ -57,11 +80,11 @@
                                     {{ $unit->is_active ? 'Activa' : 'Inactiva' }}
                                 </span>
                             </td>
-                            <td class="px-5 py-4">
+                            <td role="cell" data-label="Acciones" class="px-5 py-4">
                                 <div class="flex flex-wrap justify-end gap-2">
-                                    <a href="{{ route('units.show', $unit) }}" class="inline-flex min-h-10 items-center rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Ver</a>
+                                    <a href="{{ route('units.show', $unit) }}" class="ft-button-secondary" aria-label="Ver unidad {{ $unit->name }}">Ver</a>
                                     @can('update', $unit)
-                                        <a href="{{ route('units.edit', $unit) }}" class="inline-flex min-h-10 items-center rounded-lg border border-blue-300 px-3 py-2 text-sm font-semibold text-blue-800 hover:bg-blue-50">Editar</a>
+                                        <a href="{{ route('units.edit', $unit) }}" class="ft-button-secondary" aria-label="Editar carrera {{ $unit->name }}">Editar</a>
                                     @endcan
                                     @can('deactivate', $unit)
                                         <form method="POST" action="{{ route('units.deactivate', $unit) }}" onsubmit="return confirm('¿Está seguro de desactivar esta carrera? Esta acción no elimina su historial.')">
@@ -81,7 +104,19 @@
                             </td>
                         </tr>
                     @empty
-                        <tr><td colspan="5" class="px-5 py-10 text-center text-sm text-slate-600"><span class="block font-bold text-slate-800">Todavía no hay carreras registradas.</span><span class="mt-1 block">Las unidades institucionales aparecerán aquí cuando estén disponibles.</span></td></tr>
+                        <tr role="row">
+                            <td role="cell" colspan="5" class="ft-empty-state">
+                                @if (request()->filled('type') || request()->filled('status'))
+                                    <span class="block font-bold text-slate-800">No hay unidades con estos filtros.</span>
+                                    <span class="mt-1 block">Cambie el tipo o estado para ampliar la búsqueda.</span>
+                                    <a href="{{ route('units.index') }}" class="ft-button-secondary mt-4">Mostrar todas las unidades</a>
+                                @else
+                                    <span class="block font-bold text-slate-800">Todavía no hay carreras registradas.</span>
+                                    <span class="mt-1 block">Las unidades institucionales aparecerán aquí cuando estén disponibles.</span>
+                                    @can('create', App\Models\OrganizationalUnit::class)<a href="{{ route('units.create') }}" class="ft-button-primary mt-4">Agregar carrera</a>@endcan
+                                @endif
+                            </td>
+                        </tr>
                     @endforelse
                 </tbody>
             </table>

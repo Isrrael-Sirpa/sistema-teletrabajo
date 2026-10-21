@@ -1,18 +1,14 @@
 <x-layouts.authenticated title="Usuarios">
-    <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+    <div class="ft-page-header">
         <div>
-            <p class="text-sm font-semibold text-blue-700">Administración institucional</p>
-            <h1 class="mt-1 text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">Usuarios</h1>
-            <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600">Consulte y administre las cuentas que se encuentran dentro de su ámbito autorizado.</p>
+            <p class="ft-eyebrow">Administración institucional</p>
+            <h1 class="ft-page-title">Usuarios</h1>
+            <p class="ft-page-description">Consulte y administre las cuentas que se encuentran dentro de su ámbito autorizado.</p>
         </div>
         @can('create', App\Models\User::class)
             <a href="{{ route('users.create') }}" class="ft-button-primary shrink-0"><x-ui.icon name="plus" /> Crear usuario</a>
         @endcan
     </div>
-
-    @if (session('status'))
-        <div role="status" class="mt-6 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">{{ session('status') }}</div>
-    @endif
 
     <form method="GET" action="{{ route('users.index') }}" class="mt-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" aria-label="Filtros de usuarios">
         <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -51,43 +47,46 @@
             </div>
         </div>
         <div class="mt-4 flex flex-wrap justify-end gap-2">
-            <a href="{{ route('users.index') }}" class="inline-flex min-h-10 items-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Limpiar filtros</a>
+            <a href="{{ route('users.index') }}" class="ft-button-secondary">Limpiar filtros</a>
             <button type="submit" class="ft-button-primary">Aplicar filtros</button>
         </div>
     </form>
 
     <section class="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm" aria-labelledby="users-list-title">
-        <h2 id="users-list-title" class="sr-only">Listado de usuarios</h2>
-        <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-slate-200">
+        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-5 py-4">
+            <h2 id="users-list-title" class="font-bold text-slate-900">Listado de usuarios</h2>
+            <p class="text-sm text-slate-600">{{ $users->total() }} {{ $users->total() === 1 ? 'cuenta encontrada' : 'cuentas encontradas' }}</p>
+        </div>
+        <div class="ft-table-wrap">
+            <table class="ft-data-table min-w-full divide-y divide-slate-200" role="table">
                 <caption class="sr-only">Nombre, correo, rol, unidad, estado y acciones disponibles.</caption>
-                <thead class="bg-slate-50">
-                    <tr>
-                        <th scope="col" class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wide text-slate-600">Usuario</th>
-                        <th scope="col" class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wide text-slate-600">Rol</th>
-                        <th scope="col" class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wide text-slate-600">Unidad</th>
-                        <th scope="col" class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wide text-slate-600">Estado</th>
-                        <th scope="col" class="px-5 py-3 text-right text-xs font-bold uppercase tracking-wide text-slate-600">Acciones</th>
+                <thead class="bg-slate-50" role="rowgroup">
+                    <tr role="row">
+                        <th role="columnheader" scope="col" class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wide text-slate-600">Usuario</th>
+                        <th role="columnheader" scope="col" class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wide text-slate-600">Rol</th>
+                        <th role="columnheader" scope="col" class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wide text-slate-600">Unidad</th>
+                        <th role="columnheader" scope="col" class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wide text-slate-600">Estado</th>
+                        <th role="columnheader" scope="col" class="px-5 py-3 text-right text-xs font-bold uppercase tracking-wide text-slate-600">Acciones</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-200 bg-white">
+                <tbody class="divide-y divide-slate-200 bg-white" role="rowgroup">
                     @forelse ($users as $user)
-                        <tr>
-                            <td class="px-5 py-4">
+                        <tr role="row">
+                            <td role="cell" data-label="Usuario" class="px-5 py-4">
                                 <a href="{{ route('users.show', $user) }}" class="font-semibold text-blue-800 underline-offset-4 hover:underline">{{ $user->name }}</a>
-                                <p class="mt-1 text-sm text-slate-600">{{ $user->email }}</p>
+                                <p class="mt-1 break-all text-sm text-slate-600">{{ $user->email }}</p>
                             </td>
-                            <td class="px-5 py-4 text-sm text-slate-700">{{ $user->roleName()?->label() ?? 'Sin rol' }}</td>
-                            <td class="px-5 py-4 text-sm text-slate-700">{{ $user->organizationalUnit?->name ?? 'Ámbito global' }}</td>
-                            <td class="px-5 py-4">
+                            <td role="cell" data-label="Rol" class="px-5 py-4 text-sm text-slate-700">{{ $user->roleName()?->label() ?? 'Sin rol' }}</td>
+                            <td role="cell" data-label="Unidad" class="px-5 py-4 text-sm text-slate-700">{{ $user->organizationalUnit?->name ?? 'Ámbito global' }}</td>
+                            <td role="cell" data-label="Estado" class="px-5 py-4">
                                 <x-ui.status-badge :status="$user->status" />
                             </td>
-                            <td class="px-5 py-4 text-right">
-                                <a href="{{ route('users.show', $user) }}" class="inline-flex min-h-10 items-center rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Ver</a>
+                            <td role="cell" data-label="Acciones" class="px-5 py-4 text-right">
+                                <a href="{{ route('users.show', $user) }}" class="ft-button-secondary" aria-label="Ver usuario {{ $user->name }}">Ver usuario</a>
                             </td>
                         </tr>
                     @empty
-                        <tr><td colspan="5" class="px-5 py-10 text-center text-sm text-slate-600"><span class="block font-bold text-slate-800">No se encontraron usuarios.</span><span class="mt-1 block">Pruebe con otro nombre, rol o estado.</span></td></tr>
+                        <tr role="row"><td role="cell" colspan="5" class="ft-empty-state"><span class="block font-bold text-slate-800">No se encontraron usuarios.</span><span class="mt-1 block">Pruebe con otro nombre, rol o estado, o limpie los filtros.</span><a href="{{ route('users.index') }}" class="ft-button-secondary mt-4">Mostrar todos los usuarios</a></td></tr>
                     @endforelse
                 </tbody>
             </table>

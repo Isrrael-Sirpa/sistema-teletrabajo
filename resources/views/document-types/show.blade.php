@@ -1,24 +1,21 @@
 <x-layouts.authenticated :title="$documentType->name">
     <div class="mx-auto max-w-4xl">
-        <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div class="ft-page-header">
             <div>
-                <p class="text-sm font-semibold text-blue-700">Tipo documental</p>
-                <h1 class="mt-1 text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">{{ $documentType->name }}</h1>
-                <p class="mt-2 text-sm text-slate-600">Código interno: <span class="font-mono">{{ $documentType->code }}</span></p>
+                <p class="ft-eyebrow">Catálogo institucional · Tipo documental</p>
+                <h1 class="ft-page-title">{{ $documentType->name }}</h1>
+                <p class="ft-page-description">Consulte su uso y disponibilidad para documentos nuevos.</p>
             </div>
-            <a href="{{ route('document-types.index') }}" class="inline-flex min-h-11 items-center justify-center rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">Volver al listado</a>
+            <a href="{{ route('document-types.index') }}" class="ft-button-secondary">Volver al listado</a>
         </div>
-
-        @if (session('status'))
-            <div role="status" class="mt-6 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">{{ session('status') }}</div>
-        @endif
 
         <section class="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7" aria-labelledby="document-type-information-title">
             <h2 id="document-type-information-title" class="text-lg font-bold text-slate-950">Información</h2>
             <dl class="mt-5 grid gap-5 sm:grid-cols-2">
-                <div><dt class="text-xs font-bold uppercase tracking-wide text-slate-500">Estado</dt><dd class="mt-1 text-sm font-semibold text-slate-900">{{ $documentType->is_active ? 'Activo' : 'Inactivo' }}</dd></div>
+                <div><dt class="text-xs font-bold uppercase tracking-wide text-slate-500">Estado</dt><dd class="mt-1"><span class="ft-badge" data-status="{{ $documentType->is_active ? 'active' : 'inactive' }}">{{ $documentType->is_active ? 'Activo' : 'Inactivo' }}</span><p class="ft-field-help">{{ $documentType->is_active ? 'Disponible para crear documentos nuevos.' : 'No disponible para documentos nuevos. El historial se conserva.' }}</p></dd></div>
                 <div><dt class="text-xs font-bold uppercase tracking-wide text-slate-500">Fecha de creación</dt><dd class="mt-1 text-sm font-semibold text-slate-900">{{ $documentType->created_at->format('d/m/Y H:i') }}</dd></div>
                 <div class="sm:col-span-2"><dt class="text-xs font-bold uppercase tracking-wide text-slate-500">Descripción</dt><dd class="mt-1 whitespace-pre-line text-sm leading-6 text-slate-700">{{ $documentType->description ?: 'Sin descripción registrada.' }}</dd></div>
+                <div class="sm:col-span-2"><dt class="text-xs font-bold uppercase tracking-wide text-slate-500">Código interno</dt><dd class="mt-1 break-all font-mono text-sm text-slate-700">{{ $documentType->code }}</dd></div>
             </dl>
         </section>
 

@@ -346,6 +346,8 @@ composer audit
 - [Fase 23: producción y seguridad](docs/FASE_23_PRODUCCION_SEGURIDAD.md)
 - [Fase 24: cierre técnico](docs/FASE_24_CIERRE_TECNICO.md)
 - [Rediseño visual y experiencia de usuario](docs/REDISENO_VISUAL.md)
+- [Iteración de producto institucional: UX y validación](docs/PRODUCTO_INSTITUCIONAL_UX.md)
+- [Autoridad formal y visor privado de archivos](docs/AUTORIDAD_Y_VISOR_PRIVADO.md)
 - [Matriz de pruebas de aceptación](docs/PRUEBAS_ACEPTACION.md)
 - [Checklist de entrega](docs/CHECKLIST_ENTREGA.md)
 - [Mejoras futuras](docs/MEJORAS_FUTURAS.md)

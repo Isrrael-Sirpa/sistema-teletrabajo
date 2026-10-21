@@ -1,8 +1,13 @@
 <x-layouts.authenticated title="Crear tipo documental">
     <div class="mx-auto max-w-3xl">
-        <p class="text-sm font-semibold text-blue-700">Catálogo institucional</p>
-        <h1 class="mt-1 text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">Crear tipo documental</h1>
-        <p class="mt-2 text-sm leading-6 text-slate-600">Agregue una opción clara que podrá utilizarse en documentos futuros.</p>
+        <a href="{{ route('document-types.index') }}" class="ft-button-secondary mb-5">← Volver a tipos documentales</a>
+        <header class="ft-page-header">
+            <div>
+                <p class="ft-eyebrow">Catálogo institucional</p>
+                <h1 class="ft-page-title">Crear tipo documental</h1>
+                <p class="ft-page-description">Agregue una opción clara que podrá utilizarse en documentos futuros.</p>
+            </div>
+        </header>
 
         <form method="POST" action="{{ route('document-types.store') }}" class="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
             @csrf

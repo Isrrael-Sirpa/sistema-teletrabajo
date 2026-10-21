@@ -384,6 +384,29 @@ class DocumentRecipientManagementTest extends TestCase
         $this->assertSame(1, $document->fresh()->lock_version);
     }
 
+    public function test_draft_offers_multiple_careers_and_separates_informational_copies(): void
+    {
+        $origin = $this->career('Carrera de origen', 'ORI');
+        $second = $this->career('Carrera de destino', 'DES');
+        $creator = $this->userWithRole(RoleName::SECRETARY, $origin);
+        $document = $this->draft($creator, $origin);
+        $this->actingAs($creator)->post(route('documents.recipients.store', $document), $this->unitPayload($second, true, 0))
+            ->assertRedirect();
+
+        $this->actingAs($creator)->get(route('documents.show', $document))
+            ->assertOk()
+            ->assertSee('data-multi-career-form', false)
+            ->assertSee('Buscar carrera')
+            ->assertSee($origin->name)
+            ->assertSee($second->name)
+            ->assertSee('Ya es destinatario principal')
+            ->assertSee('0 carreras seleccionadas.')
+            ->assertSee('Agregar carreras seleccionadas')
+            ->assertSee('Copia informativa')
+            ->assertSee('+ Agregar copia informativa')
+            ->assertSee('name="requires_response" value="0"', false);
+    }
+
     public function test_authorized_view_shows_recipients_but_horizontal_access_is_denied(): void
     {
         $origin = $this->career('Ingeniería Metalúrgica', 'MET');
@@ -402,9 +425,35 @@ class DocumentRecipientManagementTest extends TestCase
         ]);
 
         $this->actingAs($creator)->get(route('documents.show', $document))
-            ->assertOk()->assertSee($target->name)->assertSee('Requiere respuesta');
+            ->assertOk()->assertSee($target->name)->assertSee('Destinatario principal');
         $this->actingAs($other)->get(route('documents.show', $document))
             ->assertForbidden()->assertDontSee($target->name);
+    }
+
+    public function test_add_and_remove_redirects_supply_fresh_html_fragments_and_document_version(): void
+    {
+        $origin = $this->career('Origen de prueba UX', 'OUX');
+        $destination = $this->career('Destino de prueba UX', 'DUX');
+        $creator = $this->userWithRole(RoleName::SECRETARY, $origin);
+        $document = $this->draft($creator, $origin);
+        $url = route('documents.show', $document);
+
+        $this->actingAs($creator)->from($url)->post(route('documents.recipients.store', $document), $this->unitPayload($destination, true, 0))
+            ->assertRedirect($url);
+        $this->get($url)->assertOk()->assertSee('1 principal · 0 copias')
+            ->assertSee('data-recipient-list', false)->assertSee('data-career-options', false)
+            ->assertSee('data-recipient-send-controls', false)
+            ->assertSee('value="1" data-multi-career-lock-version', false)
+            ->assertSee('Ya es destinatario principal');
+        $recipient = $document->recipients()->sole();
+
+        $this->from($url)->delete(route('documents.recipients.destroy', $document), [
+            'recipient_id' => $recipient->id, 'lock_version' => 1,
+        ])->assertRedirect($url);
+        $this->get($url)->assertOk()->assertSee('0 principales · 0 copias')
+            ->assertSee('value="2" data-multi-career-lock-version', false)
+            ->assertDontSee('Ya es destinatario principal')
+            ->assertDontSee('data-recipient-operation="remove"', false);
     }
 
     /** @return array<string, mixed> */

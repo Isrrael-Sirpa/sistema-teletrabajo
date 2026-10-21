@@ -44,6 +44,7 @@ class PostgreSqlDashboardTest extends TestCase
     {
         $this->assertSame('pgsql', DB::connection()->getDriverName());
         $admin = $this->user(RoleName::ADMINISTRATOR);
+        $baseline = collect($this->actingAs($admin)->get(route('dashboard'))->viewData('cards'));
         $career = $this->career();
         $creator = $this->user(RoleName::SECRETARY, $career);
         $this->document($creator, $career, DocumentStatus::SENT, now()->subHour());
@@ -54,10 +55,12 @@ class PostgreSqlDashboardTest extends TestCase
         $cards = collect($response->viewData('cards'));
 
         $response->assertOk();
-        $this->assertSame(1, (int) $cards->firstWhere('label', 'Documentos enviados pendientes')['count']);
-        $this->assertSame(1, (int) $cards->firstWhere('label', 'Documentos en revisión')['count']);
-        $this->assertSame(1, (int) $cards->firstWhere('label', 'Vencidos')['count']);
-        $this->assertSame(1, (int) $cards->firstWhere('label', 'Próximos a vencer')['count']);
+        foreach (['Documentos enviados pendientes', 'Documentos en revisión', 'Vencidos', 'Próximos a vencer'] as $label) {
+            $this->assertSame(
+                (int) $baseline->firstWhere('label', $label)['count'] + 1,
+                (int) $cards->firstWhere('label', $label)['count'],
+            );
+        }
     }
 
     private function career(): OrganizationalUnit

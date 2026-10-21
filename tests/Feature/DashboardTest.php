@@ -261,7 +261,7 @@ class DashboardTest extends TestCase
 
         $this->actingAs($extra)->get(route('dashboard'))
             ->assertOk()
-            ->assertSee('No tiene documentos pendientes por atender.');
+            ->assertSee('Todavía no tiene documentos autorizados.');
     }
 
     public function test_attention_list_orders_and_limits_in_sql_without_n_plus_one(): void

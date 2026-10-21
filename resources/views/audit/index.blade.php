@@ -1,15 +1,22 @@
 <x-layouts.authenticated title="Auditoría">
     <div class="space-y-6">
-        <header>
-            <p class="text-sm font-semibold uppercase tracking-wide text-blue-700">Administración</p>
-            <h1 class="mt-1 text-3xl font-bold text-slate-950">Auditoría</h1>
-            <p class="mt-2 max-w-3xl text-sm text-slate-600">
-                Registro de acciones sensibles y administrativas. El historial del ciclo documental permanece separado.
+        <header class="ft-page-header">
+            <div>
+            <p class="ft-eyebrow">Seguridad y trazabilidad</p>
+            <h1 class="ft-page-title">Auditoría</h1>
+            <p class="ft-page-description">
+                Consulte quién realizó una acción administrativa, cuándo ocurrió y cuál fue su resultado. Este registro es de consulta y no permite modificar los eventos.
             </p>
+            </div>
         </header>
 
         <form method="GET" action="{{ route('audit.index') }}" class="ft-card p-4 sm:p-5" aria-label="Filtros de auditoría">
-            <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <h2 class="ft-form-section-title">Buscar una actividad</h2>
+            <p class="ft-field-help">Complete solo los filtros que necesite. Para seguir los cambios de un documento, consulte su historial dentro del documento.</p>
+            @if ($errors->any())
+                <div role="alert" data-form-errors tabindex="-1" class="ft-alert ft-alert-error mt-4"><p class="font-bold">Revise los filtros seleccionados.</p><ul class="mt-1 list-inside list-disc">@foreach ($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>
+            @endif
+            <div class="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <label class="text-sm font-medium text-slate-700">
                     Desde
                     <input type="date" name="from" value="{{ request('from') }}" class="mt-1 min-h-11 w-full rounded-lg border-slate-300">
@@ -19,7 +26,7 @@
                     <input type="date" name="to" value="{{ request('to') }}" class="mt-1 min-h-11 w-full rounded-lg border-slate-300">
                 </label>
                 <label class="text-sm font-medium text-slate-700">
-                    Actor
+                    Usuario que realizó la acción
                     <select name="actor" class="mt-1 min-h-11 w-full rounded-lg border-slate-300">
                         <option value="">Todos</option>
                         @foreach ($actors as $actor)
@@ -59,38 +66,40 @@
             </div>
             <div class="mt-4 flex flex-wrap gap-3">
                 <button type="submit" class="ft-button-primary">Aplicar filtros</button>
-                <a href="{{ route('audit.index') }}" class="ft-button-secondary">Limpiar</a>
+                <a href="{{ route('audit.index') }}" class="ft-button-secondary">Limpiar filtros</a>
             </div>
         </form>
 
-        <section class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm" aria-label="Registros de auditoría">
-            <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-slate-200 text-left text-sm">
-                    <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
-                        <tr>
-                            <th class="px-4 py-3">Fecha y hora</th>
-                            <th class="px-4 py-3">Actor</th>
-                            <th class="px-4 py-3">Acción</th>
-                            <th class="px-4 py-3">Recurso</th>
-                            <th class="px-4 py-3">Resultado</th>
-                            <th class="px-4 py-3">IP</th>
-                            <th class="px-4 py-3"><span class="sr-only">Detalle</span></th>
+        <section class="ft-card overflow-hidden" aria-label="Registros de auditoría">
+            <div class="border-b border-slate-200 px-4 py-4 sm:px-5"><h2 class="font-bold text-slate-950">Actividad registrada</h2><p class="mt-1 text-sm text-slate-600">{{ number_format($logs->total(), 0, ',', '.') }} {{ $logs->total() === 1 ? 'registro encontrado' : 'registros encontrados' }} · Hora de Bolivia</p></div>
+            <div class="ft-table-wrap">
+                <table role="table" class="ft-data-table min-w-full divide-y divide-slate-200 text-left text-sm">
+                    <caption class="sr-only">Acciones administrativas registradas, con su fecha, responsable y resultado</caption>
+                    <thead role="rowgroup" class="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
+                        <tr role="row">
+                            <th role="columnheader" scope="col" class="px-4 py-3">Fecha y hora</th>
+                            <th role="columnheader" scope="col" class="px-4 py-3">Usuario</th>
+                            <th role="columnheader" scope="col" class="px-4 py-3">Acción</th>
+                            <th role="columnheader" scope="col" class="px-4 py-3">Recurso</th>
+                            <th role="columnheader" scope="col" class="px-4 py-3">Resultado</th>
+                            <th role="columnheader" scope="col" class="px-4 py-3">Dirección IP</th>
+                            <th role="columnheader" scope="col" class="px-4 py-3"><span class="sr-only">Detalle</span></th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-100">
+                    <tbody role="rowgroup" class="divide-y divide-slate-100">
                         @forelse ($logs as $log)
-                            <tr class="align-top">
-                                <td class="whitespace-nowrap px-4 py-4 text-slate-700">{{ $log->occurred_at->timezone(config('app.timezone'))->format('d/m/Y H:i:s') }}</td>
-                                <td class="px-4 py-4">
+                            <tr role="row" class="align-top">
+                                <td role="cell" data-label="Fecha y hora" class="whitespace-nowrap px-4 py-4 text-slate-700">{{ $log->occurred_at->timezone(config('app.timezone'))->format('d/m/Y H:i:s') }}</td>
+                                <td role="cell" data-label="Usuario" class="px-4 py-4">
                                     <span class="font-medium text-slate-900">{{ $log->actor?->name ?? 'Sistema / visitante' }}</span>
                                     @if ($log->actor)<span class="block text-xs text-slate-500">{{ $log->actor->email }}</span>@endif
                                 </td>
-                                <td class="px-4 py-4 text-slate-800">{{ $log->action->label() }}</td>
-                                <td class="px-4 py-4 text-slate-700">
+                                <td role="cell" data-label="Acción" class="px-4 py-4 text-slate-800">{{ $log->action->label() }}</td>
+                                <td role="cell" data-label="Recurso" class="px-4 py-4 text-slate-700">
                                     {{ $resourceTypes[$resourceNames[$log->auditable_type] ?? ''] ?? 'Sin recurso' }}
                                     @if ($log->auditable_id)<span class="sr-only">Identificador interno {{ $log->auditable_id }}</span>@endif
                                 </td>
-                                <td class="px-4 py-4">
+                                <td role="cell" data-label="Resultado" class="px-4 py-4">
                                     @php($result = $log->result())
                                     <span @class([
                                         'inline-flex rounded-full px-2 py-1 text-xs font-semibold',
@@ -99,11 +108,11 @@
                                         'bg-red-100 text-red-800' => $result->value === 'failed',
                                     ])>{{ $result->label() }}</span>
                                 </td>
-                                <td class="whitespace-nowrap px-4 py-4 text-slate-700">{{ $log->ip_address ?? 'No disponible' }}</td>
-                                <td class="px-4 py-4">
+                                <td role="cell" data-label="Dirección IP" class="whitespace-nowrap px-4 py-4 text-slate-700">{{ $log->ip_address ?? 'No disponible' }}</td>
+                                <td role="cell" data-label="Detalle" class="px-4 py-4">
                                     @if ($log->old_values || $log->new_values || $log->user_agent)
-                                        <details class="min-w-64">
-                                            <summary class="cursor-pointer font-semibold text-blue-800">Ver detalle seguro</summary>
+                                        <details class="w-full max-w-xl">
+                                            <summary class="min-h-11 cursor-pointer font-semibold text-blue-800">Ver detalle</summary>
                                             <div class="mt-3 space-y-3 rounded-lg bg-slate-50 p-3 text-xs text-slate-700">
                                                 @foreach (['old_values' => 'Valores anteriores', 'new_values' => 'Valores nuevos'] as $field => $heading)
                                                     @if ($log->{$field})
@@ -111,7 +120,7 @@
                                                             <p class="font-semibold text-slate-900">{{ $heading }}</p>
                                                             <dl class="mt-1 space-y-1">
                                                                 @foreach ($log->{$field} as $key => $value)
-                                                                    <div class="grid grid-cols-[minmax(7rem,auto)_1fr] gap-2">
+                                                                    <div class="grid gap-1 sm:grid-cols-[minmax(7rem,auto)_1fr] sm:gap-2">
                                                                         <dt>{{ str($key)->replace('_', ' ')->headline() }}</dt>
                                                                         <dd class="break-words font-medium">{{ is_array($value) ? implode(', ', array_map(fn ($item) => is_scalar($item) ? (string) $item : '[dato]', $value)) : (is_bool($value) ? ($value ? 'Sí' : 'No') : ($value ?? 'Sin valor')) }}</dd>
                                                                     </div>
@@ -121,7 +130,7 @@
                                                     @endif
                                                 @endforeach
                                                 @if ($log->user_agent)
-                                                    <div><span class="font-semibold text-slate-900">Agente:</span> <span class="break-words">{{ $log->user_agent }}</span></div>
+                                                    <div><span class="font-semibold text-slate-900">Navegador / dispositivo:</span> <span class="break-all">{{ $log->user_agent }}</span></div>
                                                 @endif
                                                 <div><span class="font-semibold text-slate-900">Solicitud:</span> {{ $log->request_id }}</div>
                                             </div>
@@ -130,7 +139,7 @@
                                 </td>
                             </tr>
                         @empty
-                            <tr><td colspan="7" class="px-4 py-10 text-center text-slate-600"><span class="block font-bold text-slate-800">No hay registros para esta búsqueda.</span><span class="mt-1 block">Ajuste el período o los filtros para ampliar los resultados.</span></td></tr>
+                            <tr role="row"><td role="cell" colspan="7" class="ft-empty-state text-slate-600"><span class="block font-bold text-slate-800">No hay registros para esta búsqueda.</span><span class="mt-2 block">Ajuste el período o seleccione «Limpiar filtros» para ampliar los resultados.</span></td></tr>
                         @endforelse
                     </tbody>
                 </table>

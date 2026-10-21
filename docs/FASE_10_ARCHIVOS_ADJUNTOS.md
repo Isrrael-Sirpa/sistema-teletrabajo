@@ -1,5 +1,7 @@
 # Fase 10: archivos adjuntos
 
+Actualización del 19/10/2026: la misma ruta privada admite visualización inline autorizada de PDF, JPEG y PNG. Los grants de ficha no conceden acceso al contenido. Véase [Autoridad formal y visor privado](AUTORIDAD_Y_VISOR_PRIVADO.md) para la seguridad, experiencia y pruebas del visor añadido posteriormente.
+
 ## Resultado
 
 La gestión inicial de archivos documentales quedó implementada sobre las tablas `document_versions` y `document_files` creadas en la Fase 2. Los archivos pertenecen a la versión inicial `1`, se almacenan fuera del directorio público y solo pueden descargarse mediante una ruta autenticada y autorizada.

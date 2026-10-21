@@ -1,5 +1,7 @@
 # Fase 11: estados y flujo documental
 
+Actualización de autoridad del 19/10/2026: las cinco acciones formales quedan limitadas a Jefe y Secretaria activos del destino. El alcance global no concede esas acciones y el Auxiliar no inicia revisión. Véase [Autoridad formal y visor privado](AUTORIDAD_Y_VISOR_PRIVADO.md) para el cambio y su validación posterior.
+
 ## Resultado
 
 Se implementó el envío oficial y el flujo principal por destinatario: `sent`, `received`, `in_review`, `approved`, `returned` y `rejected`. El documento conserva un estado general agregado calculado a partir de sus destinatarios.
@@ -29,7 +31,7 @@ Ejemplo: `FTEC-SIS-2026-000001`. Para un origen que sea la propia Facultad no se
 | Acción | Estado inicial | Estado final | Condiciones |
 |---|---|---|---|
 | Enviar | `draft` | `sent` | Documento válido, destinatarios preparados y permiso de envío. |
-| Recibir | `sent` | `received` | Participante autorizado del destino o supervisión global. |
+| Recibir | `sent` | `received` | Jefe o Secretaria activos del destino y permiso correspondiente. |
 | Iniciar revisión | `received` | `in_review` | Destino formal, permiso de revisión y `requires_response=true`. |
 | Aprobar | `in_review` | `approved` | Participación en el destino y permiso de aprobación. |
 | Devolver | `received` o `in_review` | `returned` | Participación, permiso y motivo obligatorio. |
@@ -39,9 +41,9 @@ No se admiten saltos como `sent -> approved`, `draft -> rejected` o `approved ->
 
 ## Autorización por destino
 
-- Administrador y Co-administrador pueden supervisar globalmente.
+- Administrador y Co-administrador pueden supervisar globalmente, pero no reciben ni ejecutan las otras cuatro acciones formales por su alcance global. La anulación autorizada es independiente.
 - En un destino de unidad, Jefe y Secretaria pueden recibir y decidir dentro de su unidad.
-- Auxiliar puede iniciar revisión dentro de su unidad, pero no recibir oficialmente ni tomar decisiones.
+- Auxiliar no puede recibir, iniciar revisión, aprobar, devolver ni rechazar; conserva su colaboración no decisoria autorizada.
 - En un destino personal formal solo se admite Jefe de Carrera o Secretaria; la persona indicada actúa únicamente si además posee el permiso RBAC necesario.
 - Auxiliar puede ser destinatario personal únicamente como copia informativa. Esa copia no recibe artificialmente capacidad de recepción o decisión y no bloquea el cierre formal.
 - Extra no puede ser destinatario documental normal ni obtiene visibilidad automática por pertenecer a la unidad. Su acceso corresponde a `document_access_grants` en la fase prevista.

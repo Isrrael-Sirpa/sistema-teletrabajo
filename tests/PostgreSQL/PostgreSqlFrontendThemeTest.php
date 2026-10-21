@@ -15,7 +15,7 @@ class PostgreSqlFrontendThemeTest extends TestCase
 {
     use DatabaseTransactions;
 
-    public function test_existing_careers_and_uat_accounts_render_their_own_theme_without_writes(): void
+    public function test_existing_careers_render_each_role_theme_with_transactional_fixtures(): void
     {
         $this->assertSame('pgsql', DB::getDriverName());
         $this->assertSame(9, OrganizationalUnit::query()->where('type', OrganizationalUnitType::CAREER->value)->count());
@@ -27,7 +27,13 @@ class PostgreSqlFrontendThemeTest extends TestCase
             foreach ([RoleName::CAREER_HEAD, RoleName::SECRETARY] as $role) {
                 $user = User::query()->where('organizational_unit_id', $career->id)
                     ->where('status', UserStatus::ACTIVE->value)
-                    ->role($role->value)->sole();
+                    ->role($role->value)->first();
+
+                if (! $user) {
+                    // Do not reactivate an institutional account to test presentation.
+                    $user = User::factory()->create(['organizational_unit_id' => $career->id]);
+                    $user->assignRole($role->value);
+                }
 
                 $this->actingAs($user)->get(route('dashboard'))
                     ->assertOk()

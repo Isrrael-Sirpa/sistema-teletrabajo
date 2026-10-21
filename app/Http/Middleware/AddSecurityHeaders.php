@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class AddSecurityHeaders
 {
@@ -16,8 +17,19 @@ class AddSecurityHeaders
     public function apply(Request $request, Response $response): Response
     {
 
+        $privateInline = $request->routeIs('documents.files.download')
+            && $request->attributes->get('authorized_private_file_inline') === true
+            && $response instanceof StreamedResponse
+            && $response->isSuccessful();
+        $csp = (string) config('security.headers.content_security_policy');
+
+        if ($privateInline) {
+            $directives = array_filter(explode(';', $csp), fn (string $directive): bool => trim($directive) !== '' && ! preg_match('/^frame-ancestors(?:\s|$)/i', trim($directive)));
+            $csp = "frame-ancestors 'self'; ".implode('; ', array_map('trim', $directives));
+        }
+
         $response->headers->set('X-Content-Type-Options', 'nosniff');
-        $response->headers->set('X-Frame-Options', 'DENY');
+        $response->headers->set('X-Frame-Options', $privateInline ? 'SAMEORIGIN' : 'DENY');
         $response->headers->set('Referrer-Policy', 'strict-origin-when-cross-origin');
         $response->headers->set(
             'Permissions-Policy',
@@ -25,7 +37,7 @@ class AddSecurityHeaders
         );
         $response->headers->set(
             'Content-Security-Policy',
-            (string) config('security.headers.content_security_policy'),
+            $csp,
         );
 
         if ($request->isSecure() && config('security.hsts.enabled')) {

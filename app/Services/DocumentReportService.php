@@ -10,7 +10,9 @@ use App\Models\DocumentRecipient;
 use App\Models\DocumentType;
 use App\Models\OrganizationalUnit;
 use App\Models\User;
+use App\Support\DocumentReportPresentation;
 use Carbon\CarbonImmutable;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
@@ -20,6 +22,7 @@ class DocumentReportService
     public function __construct(
         private readonly DocumentSearchService $search,
         private readonly DocumentDeadlineService $deadlines,
+        private readonly DocumentReportPresentation $presentation,
     ) {}
 
     /** @param array<string, mixed> $filters @return Builder<Document> */
@@ -87,10 +90,10 @@ class DocumentReportService
         return compact('units', 'people', 'documentTypes');
     }
 
-    /** @param Builder<Document> $query */
-    public function csv(Builder $query): string
+    /** @param Builder<Document> $query @return Collection<int, Document> */
+    public function exportDocuments(Builder $query): Collection
     {
-        $documents = $this->clean($query)
+        return $this->clean($query)
             ->select([
                 'documents.id', 'documents.code', 'documents.document_type_id',
                 'documents.origin_unit_id', 'documents.sender_user_id', 'documents.subject',
@@ -102,30 +105,28 @@ class DocumentReportService
             ->orderByDesc('documents.created_at')
             ->orderByDesc('documents.id')
             ->get();
+    }
 
+    /** @param Builder<Document> $query */
+    public function csv(Builder $query): string
+    {
+        return $this->csvDocuments($this->exportDocuments($query));
+    }
+
+    /** @param Collection<int, Document> $documents */
+    public function csvDocuments(Collection $documents): string
+    {
         $stream = fopen('php://temp', 'w+b');
         fwrite($stream, "\xEF\xBB\xBF");
-        fputcsv($stream, [
-            'Código', 'Tipo documental', 'Asunto', 'Origen', 'Estado', 'Prioridad',
-            'Clasificación', 'Fecha de envío', 'Fecha límite', 'Vencimiento',
-            'Remitente', 'Cantidad de destinatarios',
-        ]);
+        fputcsv($stream, $this->presentation->headers(), ';', '"', '', "\r\n");
 
         foreach ($documents as $document) {
-            fputcsv($stream, array_map($this->safeCsvCell(...), [
-                $document->code ?? 'Borrador sin código',
-                $document->documentType->name,
-                $document->subject,
-                $document->originUnit->name,
-                $document->general_status->label(),
-                $document->priority->label(),
-                $document->confidentiality->label(),
-                $document->sent_at?->timezone($this->deadlines->timezone())->format('Y-m-d H:i') ?? '',
-                $document->due_at?->timezone($this->deadlines->timezone())->format('Y-m-d H:i') ?? '',
-                $this->deadlines->status($document)->label(),
-                $document->sender?->name ?? '',
-                (string) $document->recipients_count,
-            ]));
+            fputcsv($stream, array_map(
+                fn (mixed $value): string => $this->safeCsvCell(
+                    $value instanceof CarbonInterface ? $value->format('d/m/Y H:i') : $value,
+                ),
+                $this->presentation->values($document),
+            ), ';', '"', '', "\r\n");
         }
 
         rewind($stream);

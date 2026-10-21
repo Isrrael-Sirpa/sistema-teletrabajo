@@ -28,6 +28,11 @@ class DocumentFile extends Model
         return 'public_id';
     }
 
+    public function supportsInlinePreview(): bool
+    {
+        return in_array($this->detected_mime_type, ['application/pdf', 'image/jpeg', 'image/png'], true);
+    }
+
     public function documentVersion(): BelongsTo
     {
         return $this->belongsTo(DocumentVersion::class);

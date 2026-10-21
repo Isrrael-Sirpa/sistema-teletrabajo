@@ -251,6 +251,100 @@ class DocumentReportTest extends TestCase
         $this->assertDatabaseMissing('audit_logs', ['action' => AuditAction::REPORT_EXPORTED->value]);
     }
 
+    public function test_csv_presentation_has_administrative_columns_local_dates_and_controlled_missing_values(): void
+    {
+        [$admin, $career, $creator] = $this->context();
+        $creator->forceFill(['name' => 'María Peña'])->save();
+        $subject = "carta de aprobacion de equipos; \"área técnica\"\nsegunda línea, á é í ó ú ñ \\";
+        $sent = $this->document($creator, $career, $subject);
+        $sent->forceFill([
+            // The ephemeral test database stores local wall-clock timestamps.
+            'sent_at' => CarbonImmutable::parse('2026-10-21 14:18:00', 'UTC')->setTimezone('America/La_Paz'),
+            'due_at' => CarbonImmutable::parse('2026-11-01 03:59:00', 'UTC')->setTimezone('America/La_Paz'),
+        ])->save();
+        $this->recipient($sent, $career, DocumentRecipientStatus::SENT);
+        $draft = $this->document($creator, $career, 'borrador sin fecha', DocumentStatus::DRAFT);
+        $draftWithDue = $this->document($creator, $career, 'borrador con fecha', DocumentStatus::DRAFT,
+            dueAt: CarbonImmutable::parse('2026-10-31 23:59:00', 'America/La_Paz'));
+
+        $response = $this->actingAs($admin)->get(route('reports.documents.csv'));
+        $response->assertOk()->assertDownload('reporte-documentos-20261012-100000.csv');
+        $content = $response->streamedContent();
+        $this->assertStringStartsWith("\xEF\xBB\xBF", $content);
+        $this->assertStringStartsWith("\xEF\xBB\xBFCódigo;", $content);
+        $this->assertStringContainsString("\r\n", $content);
+        $rows = $this->csvRows($content);
+        $this->assertSame([
+            'Código', 'Tipo de documento', 'Asunto', 'Unidad de origen', 'Remitente',
+            'Estado', 'Prioridad', 'Clasificación', 'Fecha de envío', 'Fecha límite',
+            'Situación del plazo', 'Destinatarios',
+        ], array_shift($rows));
+        $this->assertCount(3, $rows);
+        $bySubject = collect($rows)->keyBy(fn (array $row): string => $row[2]);
+        $this->assertSame([
+            $sent->code, $sent->documentType->name, $subject, $career->name, 'María Peña',
+            'Enviado', 'Normal', 'Normal', '21/10/2026 10:18', '31/10/2026 23:59', 'Vigente', '1',
+        ], $bySubject[$subject]);
+        $this->assertSame([
+            '—', $draft->documentType->name, $draft->subject, $career->name, '—',
+            'Borrador', 'Normal', 'Normal', '—', '—', 'Sin fecha límite', '0',
+        ], $bySubject[$draft->subject]);
+        $this->assertSame('31/10/2026 23:59', $bySubject[$draftWithDue->subject][9]);
+        $this->assertSame('No aplicable', $bySubject[$draftWithDue->subject][10]);
+        $this->assertNull($draft->fresh()->code);
+        $this->assertSame($subject, $sent->fresh()->subject);
+        $this->assertTrue($sent->fresh()->sent_at->equalTo(CarbonImmutable::parse('2026-10-21 14:18:00', 'UTC')));
+    }
+
+    public function test_report_shows_readable_applied_filters_and_preserves_export_parameters(): void
+    {
+        [$admin, $career, $creator] = $this->context();
+        $document = $this->document($creator, $career, 'carta institucional');
+        $filters = [
+            'report' => 'sent', 'status' => 'sent', 'origin_unit' => $career->public_id,
+            'document_type' => $document->documentType->public_id,
+            'period_from' => '2026-10-01', 'period_to' => '2026-10-31',
+            'q' => 'carta', 'sent_from' => '2026-10-01', 'sort' => 'code', 'direction' => 'asc',
+        ];
+
+        $response = $this->actingAs($admin)->get(route('reports.documents.index', $filters));
+        $response->assertOk()
+            ->assertSee('Reportes documentales')->assertSee('Filtros aplicados')
+            ->assertSee('01/10/2026')->assertSee('31/10/2026')
+            ->assertSee('fecha de envío')->assertSee('Documentos enviados')
+            ->assertSee('Descargar CSV')->assertSee('Aplicar filtros')
+            ->assertSee('name="q" value="carta"', false)
+            ->assertSee('name="sent_from" value="2026-10-01"', false)
+            ->assertDontSee('Borrador sin código');
+        preg_match('/href="([^"]+)"[^>]*data-report-export/', $response->getContent(), $exportLink);
+        $url = html_entity_decode($exportLink[1], ENT_QUOTES, 'UTF-8');
+        $this->assertSame(route('reports.documents.csv', absolute: false), parse_url($url, PHP_URL_PATH));
+        parse_str(parse_url($url, PHP_URL_QUERY), $exportFilters);
+        $this->assertEquals($filters, $exportFilters);
+        $this->assertSame([$document->id], $response->viewData('documents')->pluck('id')->all());
+    }
+
+    public function test_report_summary_uses_all_filtered_documents_not_only_the_current_page(): void
+    {
+        config(['reports.per_page' => 5]);
+        [$admin, $career, $creator] = $this->context();
+        foreach (range(1, 7) as $number) {
+            $this->document($creator, $career, 'Enviado '.$number);
+        }
+        $this->document($creator, $career, 'Borrador', DocumentStatus::DRAFT);
+        $this->document($creator, $career, 'Anulado', DocumentStatus::ANNULLED);
+
+        $response = $this->actingAs($admin)->get(route('reports.documents.index'));
+        $response->assertOk();
+        $this->assertCount(5, $response->viewData('documents'));
+        preg_match('/<section aria-labelledby="report-summary-title">(.*?)<\/section>/s', $response->getContent(), $summary);
+        preg_match_all('/<dd[^>]*>(.*?)<\/dd>/s', $summary[1], $values);
+        $this->assertSame(['9 documentos', '7', '1', '1'], array_map(
+            fn (string $html): string => trim(preg_replace('/\s+/', ' ', strip_tags($html))),
+            $values[1],
+        ));
+    }
+
     public function test_export_audit_contains_safe_administrative_metadata_only(): void
     {
         [$admin, $career, $creator] = $this->context();
@@ -385,6 +479,21 @@ class DocumentReportTest extends TestCase
         $ids = collect($documents)->pluck('id')->sort()->values()->all();
         $this->assertSame($ids, $actual);
         $this->assertSame(count($ids), $response->viewData('documents')->total());
+    }
+
+    /** @return array<int, array<int, string|null>> */
+    private function csvRows(string $content): array
+    {
+        $stream = fopen('php://temp', 'w+b');
+        fwrite($stream, substr($content, 3));
+        rewind($stream);
+        $rows = [];
+        while (($row = fgetcsv($stream, separator: ';', escape: '')) !== false) {
+            $rows[] = $row;
+        }
+        fclose($stream);
+
+        return $rows;
     }
 
     private function queryCount(User $user): int

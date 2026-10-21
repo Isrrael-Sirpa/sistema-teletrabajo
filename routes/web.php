@@ -34,6 +34,12 @@ Route::middleware(['auth', 'active.user'])->group(function (): void {
         Route::get('/documentos/exportar/csv', [DocumentReportController::class, 'csv'])
             ->middleware(['permission_or_delegation:reports.export', 'throttle:10,1'])
             ->name('documents.csv');
+        Route::get('/documentos/exportar/xlsx', [DocumentReportController::class, 'xlsx'])
+            ->middleware(['permission_or_delegation:reports.export', 'throttle:10,1'])
+            ->name('documents.xlsx');
+        Route::get('/documentos/exportar/pdf', [DocumentReportController::class, 'pdf'])
+            ->middleware(['permission_or_delegation:reports.export', 'throttle:10,1'])
+            ->name('documents.pdf');
     });
 
     Route::prefix('administracion/delegaciones')->name('delegations.')->middleware('permission:delegations.manage_global|delegations.manage_unit')->group(function (): void {

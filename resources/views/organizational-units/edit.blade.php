@@ -1,8 +1,13 @@
 <x-layouts.authenticated title="Editar carrera" :career-unit="$unit">
     <div class="mx-auto max-w-3xl">
-        <a href="{{ route('units.show', $unit) }}" class="text-sm font-semibold text-blue-800 underline-offset-4 hover:underline">← Volver al detalle</a>
-        <h1 class="mt-4 text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">Editar carrera</h1>
-        <p class="mt-2 text-sm leading-6 text-slate-600">Actualice los datos institucionales sin alterar el tipo ni la unidad padre.</p>
+        <a href="{{ route('units.show', $unit) }}" class="ft-button-secondary mb-5">← Volver al detalle</a>
+        <header class="ft-page-header">
+            <div>
+                <p class="ft-eyebrow">Administración institucional</p>
+                <h1 class="ft-page-title">Editar carrera</h1>
+                <p class="ft-page-description">Actualice los datos de {{ $unit->name }}. La carrera seguirá perteneciendo a {{ $unit->parent->name }}.</p>
+            </div>
+        </header>
 
         <form method="POST" action="{{ route('units.update', $unit) }}" class="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
             @csrf

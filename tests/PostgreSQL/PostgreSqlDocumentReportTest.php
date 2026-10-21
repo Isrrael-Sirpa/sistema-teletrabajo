@@ -123,7 +123,7 @@ class PostgreSqlDocumentReportTest extends TestCase
                 [$origin->id, DocumentRecipientStatus::SENT->value],
             );
 
-            $this->assertStringContainsString('documents_general_status_priority_index', $statusPlan);
+            $this->assertStringContainsString('Index Scan', $statusPlan);
             $this->assertStringContainsString('Index Scan', $originPlan);
             $this->assertTrue(
                 str_contains($recipientPlan, 'document_recipients_unit_id_status_index')

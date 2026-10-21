@@ -93,6 +93,7 @@ class PostgreSqlDocumentRecipientTest extends TestCase
         [$document, $origin, $creator] = $this->authorizedDocumentContext();
         $targetUnit = $this->career();
         $target = $this->userWithRole(RoleName::CAREER_HEAD, $targetUnit);
+        $notificationCount = DB::table('notifications')->count();
 
         $recipient = app(DocumentRecipientService::class)->add($creator, $document, [
             'recipient_type' => 'person',
@@ -109,7 +110,7 @@ class PostgreSqlDocumentRecipientTest extends TestCase
         $this->assertSame(DocumentStatus::DRAFT, $document->general_status);
         $this->assertNull($document->code);
         $this->assertNull($document->sent_at);
-        $this->assertDatabaseCount('notifications', 0);
+        $this->assertSame($notificationCount, DB::table('notifications')->count());
         $this->assertDatabaseHas('document_events', [
             'document_id' => $document->id,
             'event_type' => 'recipient_added',

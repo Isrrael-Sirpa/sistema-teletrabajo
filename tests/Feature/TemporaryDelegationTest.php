@@ -25,6 +25,7 @@ use Database\Seeders\DocumentTypeSeeder;
 use Database\Seeders\InstitutionalStructureSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -353,6 +354,15 @@ class TemporaryDelegationTest extends TestCase
             PermissionName::DOCUMENTS_REVIEW,
             PermissionName::DOCUMENTS_APPROVE,
         ]);
+
+        foreach ([RoleName::SECRETARY_ASSISTANT, RoleName::EXTRA] as $role) {
+            $this->secretary->syncRoles([$role->value]);
+            $this->assertFalse(app(DelegatedAuthorizationService::class)->can(
+                $this->secretary, PermissionName::DOCUMENTS_RECEIVE, $this->career->id,
+            ));
+            $this->assertFalse(Gate::forUser($this->secretary)->allows('receiveRecipient', [$document, $recipient]));
+        }
+        $this->secretary->syncRoles([RoleName::SECRETARY->value]);
 
         $this->transition($document, $recipient, 'receive')->assertRedirect();
         $this->transition($document, $recipient, 'start_review')->assertRedirect();

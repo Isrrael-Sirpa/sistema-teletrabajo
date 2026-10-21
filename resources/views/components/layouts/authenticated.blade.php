@@ -6,6 +6,17 @@
     $activeCareer = $careerUnit ?? ($role?->requiresCareer() ? $viewer->organizationalUnit : null);
     $navigationUnreadCount = $unreadNotificationCount ?? $viewer->unreadNotifications()->count();
     $moduleTitle = $title ? str($title)->before(' — ')->toString() : 'Inicio';
+    $section = match (true) {
+        request()->routeIs('documents.*') => ['Documentos', route('documents.index')],
+        request()->routeIs('users.*') => ['Usuarios', route('users.index')],
+        request()->routeIs('units.*') => ['Carreras y unidades', route('units.index')],
+        request()->routeIs('document-types.*') => ['Tipos documentales', route('document-types.index')],
+        request()->routeIs('delegations.*') => ['Delegaciones', route('delegations.index')],
+        request()->routeIs('reports.*') => ['Reportes', route('reports.documents.index')],
+        request()->routeIs('audit.*') => ['Auditoría', route('audit.index')],
+        request()->routeIs('notifications.*') => ['Notificaciones', route('notifications.index')],
+        default => null,
+    };
 @endphp
 
 <x-layouts.app :title="$title ?? config('app.name')">
@@ -14,9 +25,9 @@
 
         <aside id="navegacion-principal" class="ft-sidebar fixed inset-y-0 left-0 z-50 flex -translate-x-full flex-col transition-transform duration-200 lg:translate-x-0" aria-label="Navegación principal" data-sidebar>
             <div class="ft-sidebar-brand flex min-h-24 items-center justify-between gap-3 px-5 py-5">
-                <a href="{{ route('dashboard') }}" class="min-w-0 rounded-md text-white">
-                    <span class="block text-[.68rem] font-bold uppercase tracking-[.16em] text-blue-200">UMSA · Facultad de Tecnología</span>
-                    <span class="mt-1 block text-base font-bold leading-tight">Gestión Documental</span>
+                <a href="{{ route('dashboard') }}" class="flex min-w-0 items-center gap-3 rounded-md text-white" aria-label="Facultad de Tecnología UMSA. Ir al inicio">
+                    <x-ui.brand-logos :compact="true" />
+                    <span class="min-w-0"><span class="block text-[.65rem] font-bold uppercase tracking-[.16em] text-blue-200">UMSA</span><span class="mt-1 block text-sm font-bold leading-tight">Facultad de Tecnología</span><span class="mt-1 block text-xs leading-tight text-blue-100">Gestión Documental</span></span>
                 </a>
                 <button type="button" class="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-white hover:bg-white/15 lg:hidden" aria-label="Cerrar menú" data-sidebar-close>
                     <x-ui.icon name="close" />
@@ -59,7 +70,7 @@
             </div>
         </aside>
 
-        <div class="min-w-0 lg:pl-[16.75rem]">
+        <div class="flex min-h-screen min-w-0 flex-col lg:pl-[16.75rem]" data-workspace-content>
             <header class="ft-header sticky top-0 z-30 flex items-center justify-between gap-3 px-4 sm:px-7">
                 <div class="flex min-w-0 items-center gap-3">
                     <button type="button" class="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-slate-200 text-slate-800 hover:bg-slate-50 lg:hidden" aria-controls="navegacion-principal" aria-expanded="false" aria-label="Abrir menú" data-sidebar-open>
@@ -68,7 +79,7 @@
                     <div class="min-w-0">
                         <p class="truncate text-sm font-bold text-slate-900 sm:text-base">{{ $moduleTitle }}</p>
                         @if($activeCareer)
-                            <p class="mt-0.5 flex items-center gap-1.5 truncate text-xs text-slate-600"><span class="ft-career-dot" aria-hidden="true"></span> Carrera de {{ $activeCareer->name }}</p>
+                            <p class="mt-0.5 flex items-center gap-1.5 truncate text-xs text-slate-600"><span class="ft-career-dot" aria-hidden="true"></span> {{ $careerUnit && request()->routeIs('documents.show') ? 'Origen: ' : 'Carrera de ' }}{{ $activeCareer->name }}</p>
                         @else
                             <p class="mt-0.5 hidden text-xs text-slate-500 sm:block">Facultad de Tecnología · UMSA</p>
                         @endif
@@ -99,7 +110,28 @@
                 </div>
             </header>
 
-            <main id="contenido-principal" class="ft-page">{{ $slot }}</main>
+            <main id="contenido-principal" class="ft-page flex-1" tabindex="-1">
+                @if ($section)
+                    <nav class="ft-breadcrumb" aria-label="Ubicación actual">
+                        <ol>
+                            <li><a href="{{ route('dashboard') }}">Inicio</a></li>
+                            <li aria-hidden="true">/</li>
+                            @if (url()->current() !== $section[1])
+                                <li><a href="{{ $section[1] }}">{{ $section[0] }}</a></li>
+                                <li aria-hidden="true">/</li>
+                                <li aria-current="page" class="truncate">{{ $moduleTitle }}</li>
+                            @else
+                                <li aria-current="page">{{ $section[0] }}</li>
+                            @endif
+                        </ol>
+                    </nav>
+                @endif
+                @if (session('status'))
+                    <div role="status" class="ft-alert ft-alert-success mb-6" data-status-message><span class="font-bold">Operación completada.</span> {{ session('status') }}</div>
+                @endif
+                {{ $slot }}
+            </main>
+            <footer class="ft-workspace-footer"><span>Facultad de Tecnología · UMSA</span><span>Gestión documental institucional</span></footer>
         </div>
     </div>
 </x-layouts.app>
