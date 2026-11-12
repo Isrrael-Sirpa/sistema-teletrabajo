@@ -36,8 +36,8 @@ La página pública principal es el login institucional. Después de autenticar,
 ## Tecnologías
 
 - Laravel 13
-- PHP 8.5 como objetivo de producción (Laravel permite PHP 8.3+)
-- PostgreSQL 18
+- PHP 8.3+ (PHP 8.3 / 8.4)
+- MySQL 8.4 (Laragon / InnoDB) con tablas en español
 - Blade
 - Livewire 4
 - Tailwind CSS 4
@@ -47,18 +47,41 @@ La página pública principal es el login institucional. Después de autenticar,
 
 ## Requisitos de desarrollo
 
-- PHP 8.3 o superior con `PDO`, `pdo_pgsql` y `pgsql` (`intl` recomendada para herramientas y reportes)
+- PHP 8.3 o superior con `PDO`, `pdo_mysql` y extensiones estándar
 - Composer 2
-- Node.js compatible con Vite 7 y npm
-- PostgreSQL 18
+- Node.js compatible con Vite y npm
+- MySQL 8.0+ / 8.4 (disponible en Laragon)
 
-El entorno validado dispone de PHP 8.3.28, Node.js 24 y PostgreSQL 18.3. La instalación de PHP utilizada tiene habilitadas `PDO`, `pdo_pgsql` y `pgsql`. No use SQLite en producción.
+El entorno local de desarrollo opera sobre Laragon con MySQL 8.4.3 (`127.0.0.1:3306`, base de datos `sistema_teletrabajo`).
+
+## Base de Datos y Tablas en Español
+
+Todas las tablas de dominio institucional han sido configuradas y migradas en **español**:
+
+| Tabla en Español | Responsabilidad |
+|---|---|
+| `unidades_organizacionales` | Jerarquía institucional (Facultad, Kardex y 9 Carreras) |
+| `usuarios` | Cuentas institucionales y funcionarios |
+| `roles` / `permisos` / `rol_tiene_permisos` | Control de acceso basado en roles (Spatie RBAC) |
+| `tipos_documentos` | Catálogo de tipos de documento oficiales |
+| `contadores_documentos` | Correlativos atómicos por unidad y año |
+| `documentos` | Trámites y expedientes documentales |
+| `destinatarios_documentos` | Destinatarios por unidad o persona |
+| `tareas_revision_documentos` | Revisiones internas de Secretaría y Auxiliares |
+| `versiones_documentos` / `archivos_documentos` | Versionado inmutable y adjuntos privados |
+| `observaciones_documentos` | Anotaciones y notas internas |
+| `concesiones_acceso_documentos` | Concesiones temporales de lectura y descarga para usuarios Extra |
+| `eventos_documentos` | Trazabilidad documental inmutable (append-only) |
+| `delegaciones_temporales` | Delegaciones transitorias de Jefatura |
+| `registros_auditoria` | Auditoría de acciones del sistema |
+| `notificaciones` | Notificaciones internas de base de datos |
+| `sesiones` | Sesiones HTTP en base de datos |
 
 ## Acceso
 
 - Login público: `/`
-- Panel provisional protegido: `/panel`
-- Sesiones almacenadas en PostgreSQL mediante `SESSION_DRIVER=database`
+- Panel operativo protegido: `/panel`
+- Sesiones almacenadas en MySQL mediante `SESSION_DRIVER=database` (tabla `sesiones`)
 - Solo los usuarios con estado `active` pueden autenticarse
 
 La recuperación de contraseña conserva la estructura oficial de Laravel, pero el envío de correo institucional todavía no está habilitado. Consulte [la documentación de la Fase 3](docs/FASE_3_AUTENTICACION.md).
