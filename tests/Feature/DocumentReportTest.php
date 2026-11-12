@@ -54,7 +54,7 @@ class DocumentReportTest extends TestCase
         foreach ([RoleName::ADMINISTRATOR, RoleName::CO_ADMINISTRATOR] as $role) {
             $response = $this->actingAs($this->user($role))->get(route('reports.documents.index'));
             $response->assertOk()->assertSee($first->subject)->assertSee($second->subject)->assertSee('Reportes');
-            $this->assertSame(2, $response->viewData('documents')->total());
+            $this->assertSame(2, $response->viewData('documentos')->total());
         }
     }
 
@@ -70,11 +70,13 @@ class DocumentReportTest extends TestCase
         $ownDocument = $this->document($ownSecretary, $own, 'Visible por origen');
         $incoming = $this->document($foreignSecretary, $foreign, 'Visible por destino');
         $this->recipient($incoming, $own, DocumentRecipientStatus::SENT);
+        $copy = $this->document($foreignSecretary, $foreign, 'Copia informativa');
+        $this->recipient($copy, $own, DocumentRecipientStatus::SENT)->update(['requires_response' => false]);
         $hidden = $this->document($foreignSecretary, $foreign, 'Oculto sin participación');
 
-        $this->assertReportIds($head, [$ownDocument, $incoming]);
-        $this->assertReportIds($secretary, [$incoming]);
-        $this->assertReportIds($assistant, [$incoming]);
+        $this->assertReportIds($head, [$ownDocument, $incoming, $copy]);
+        $this->assertReportIds($secretary, [$copy]);
+        $this->assertReportIds($assistant, [$copy]);
         $this->assertNotSame($hidden->id, $incoming->id);
     }
 
@@ -140,7 +142,7 @@ class DocumentReportTest extends TestCase
         ]));
 
         $response->assertOk()->assertDontSee($secret->subject)->assertSee('0 documentos');
-        $this->assertSame(0, $response->viewData('documents')->total());
+        $this->assertSame(0, $response->viewData('documentos')->total());
         $this->assertSame(0, collect($response->viewData('summaries')['statuses'])->sum('count'));
     }
 
@@ -214,7 +216,7 @@ class DocumentReportTest extends TestCase
         }
 
         $response = $this->actingAs($admin)->get(route('reports.documents.index', ['priority' => 'important']));
-        $documents = $response->viewData('documents');
+        $documents = $response->viewData('documentos');
         $response->assertOk()->assertSee('7 documentos');
         $this->assertSame(5, $documents->count());
         $this->assertStringContainsString('priority=important', (string) $documents->nextPageUrl());
@@ -248,7 +250,7 @@ class DocumentReportTest extends TestCase
 
         $this->actingAs($admin)->get(route('reports.documents.csv'))
             ->assertRedirect()->assertSessionHasErrors('export');
-        $this->assertDatabaseMissing('audit_logs', ['action' => AuditAction::REPORT_EXPORTED->value]);
+        $this->assertDatabaseMissing('registros_auditoria', ['action' => AuditAction::REPORT_EXPORTED->value]);
     }
 
     public function test_csv_presentation_has_administrative_columns_local_dates_and_controlled_missing_values(): void
@@ -321,7 +323,7 @@ class DocumentReportTest extends TestCase
         $this->assertSame(route('reports.documents.csv', absolute: false), parse_url($url, PHP_URL_PATH));
         parse_str(parse_url($url, PHP_URL_QUERY), $exportFilters);
         $this->assertEquals($filters, $exportFilters);
-        $this->assertSame([$document->id], $response->viewData('documents')->pluck('id')->all());
+        $this->assertSame([$document->id], $response->viewData('documentos')->pluck('id')->all());
     }
 
     public function test_report_summary_uses_all_filtered_documents_not_only_the_current_page(): void
@@ -336,7 +338,7 @@ class DocumentReportTest extends TestCase
 
         $response = $this->actingAs($admin)->get(route('reports.documents.index'));
         $response->assertOk();
-        $this->assertCount(5, $response->viewData('documents'));
+        $this->assertCount(5, $response->viewData('documentos'));
         preg_match('/<section aria-labelledby="report-summary-title">(.*?)<\/section>/s', $response->getContent(), $summary);
         preg_match_all('/<dd[^>]*>(.*?)<\/dd>/s', $summary[1], $values);
         $this->assertSame(['9 documentos', '7', '1', '1'], array_map(
@@ -370,7 +372,7 @@ class DocumentReportTest extends TestCase
     {
         $admin = $this->user(RoleName::ADMINISTRATOR);
         $this->actingAs($admin)->get(route('reports.documents.index', [
-            'report' => 'audit_logs',
+            'report' => 'registros_auditoria',
             'period_from' => '2026-10-12',
             'period_to' => '2026-10-11',
             'sort' => 'subject; DROP TABLE users',
@@ -475,10 +477,10 @@ class DocumentReportTest extends TestCase
         $documents = $expected ?? $filtersOrExpected;
         $response = $this->actingAs($user)->get(route('reports.documents.index', $filters));
         $response->assertOk();
-        $actual = $response->viewData('documents')->pluck('id')->sort()->values()->all();
+        $actual = $response->viewData('documentos')->pluck('id')->sort()->values()->all();
         $ids = collect($documents)->pluck('id')->sort()->values()->all();
         $this->assertSame($ids, $actual);
-        $this->assertSame(count($ids), $response->viewData('documents')->total());
+        $this->assertSame(count($ids), $response->viewData('documentos')->total());
     }
 
     /** @return array<int, array<int, string|null>> */

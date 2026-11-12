@@ -67,6 +67,6 @@ class InitialAdministratorCommandTest extends TestCase
             ->expectsOutputToContain('al menos 12 caracteres')
             ->assertExitCode(Command::FAILURE);
 
-        $this->assertDatabaseCount('users', 0);
+        $this->assertDatabaseCount('usuarios', 0);
     }
 }

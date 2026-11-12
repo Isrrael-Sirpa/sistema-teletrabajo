@@ -194,7 +194,7 @@ class OrganizationalUnitManagementTest extends TestCase
             ->patch(route('units.deactivate', $career))
             ->assertRedirect();
 
-        $this->assertDatabaseHas('organizational_units', [
+        $this->assertDatabaseHas('unidades_organizacionales', [
             'id' => $career->id,
             'is_active' => false,
         ]);

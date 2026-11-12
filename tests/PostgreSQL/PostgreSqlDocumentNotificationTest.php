@@ -95,7 +95,7 @@ class PostgreSqlDocumentNotificationTest extends TestCase
         $origin = $this->career();
         $destination = $this->career();
         $actor = $this->userWithRole(RoleName::SECRETARY, $origin);
-        $recipientUser = $this->userWithRole(RoleName::SECRETARY, $destination);
+        $recipientUser = $this->userWithRole(RoleName::CAREER_HEAD, $destination);
         $document = Document::query()->create([
             'document_type_id' => DocumentType::query()->where('is_active', true)->firstOrFail()->id,
             'origin_unit_id' => $origin->id,
@@ -110,7 +110,6 @@ class PostgreSqlDocumentNotificationTest extends TestCase
         DocumentRecipient::query()->create([
             'document_id' => $document->id,
             'unit_id' => $destination->id,
-            'user_id' => $recipientUser->id,
             'requires_response' => true,
             'status' => DocumentRecipientStatus::PREPARED,
             'lock_version' => 0,

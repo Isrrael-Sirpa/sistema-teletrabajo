@@ -30,6 +30,8 @@ enum AuditAction: string
 
     case DOCUMENT_SENT = 'documents.sent';
     case DOCUMENT_ANNULLED = 'documents.annulled';
+    case REVIEW_TASK_ASSIGNED = 'review_tasks.assigned';
+    case REVIEW_TASK_SUBMITTED = 'review_tasks.submitted';
     case FILE_DOWNLOADED = 'files.downloaded';
 
     case ACCESS_GRANT_CREATED = 'access_grants.created';
@@ -76,6 +78,8 @@ enum AuditAction: string
             self::DOCUMENT_TYPE_DEACTIVATED => 'Tipo documental desactivado',
             self::DOCUMENT_SENT => 'Documento enviado oficialmente',
             self::DOCUMENT_ANNULLED => 'Documento anulado',
+            self::REVIEW_TASK_ASSIGNED => 'Revisión interna asignada',
+            self::REVIEW_TASK_SUBMITTED => 'Revisión interna entregada',
             self::FILE_DOWNLOADED => 'Archivo privado descargado',
             self::ACCESS_GRANT_CREATED => 'Acceso explícito concedido',
             self::ACCESS_GRANT_LEVEL_CHANGED => 'Nivel de acceso cambiado',

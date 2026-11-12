@@ -164,8 +164,7 @@ class DocumentDraftService
             $origin = OrganizationalUnit::query()->active()->find($requestedOriginId);
         } else {
             $origin = OrganizationalUnit::query()
-                ->active()
-                ->careers()
+                ->availableAsDocumentDestination()
                 ->find($actor->organizational_unit_id);
         }
 

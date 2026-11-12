@@ -25,6 +25,7 @@ class DocumentWorkQueryService
     public function apply(Builder $query, User $user, string $work): bool
     {
         return match ($work) {
+            'unit_pending' => $this->unitPending($query, $user),
             'pending_receive' => $this->recipientWork($query, $user, [DocumentRecipientStatus::SENT]),
             'in_review' => $this->recipientWork($query, $user, [DocumentRecipientStatus::IN_REVIEW]),
             'decision' => $this->recipientWork(
@@ -33,12 +34,7 @@ class DocumentWorkQueryService
                 [DocumentRecipientStatus::RECEIVED, DocumentRecipientStatus::IN_REVIEW],
                 true,
             ),
-            'collaboration' => $this->recipientWork(
-                $query,
-                $user,
-                [DocumentRecipientStatus::RECEIVED, DocumentRecipientStatus::IN_REVIEW],
-            ),
-            'assigned' => $this->assignedTo($query, $user),
+            'collaboration', 'assigned' => $this->assignedTo($query, $user),
             'returned_correction' => $this->returnedToOrigin($query, $user),
             'my_drafts' => $this->ownDrafts($query, $user),
             'authorized' => true,
@@ -49,16 +45,40 @@ class DocumentWorkQueryService
     public function label(string $work): ?string
     {
         return match ($work) {
+            'unit_pending' => 'Documentos pendientes de mi unidad',
             'pending_receive' => 'Pendientes de recibir',
             'in_review' => 'En revisión',
             'decision' => 'Requieren decisión',
-            'collaboration' => 'Trabajo para colaborar',
-            'assigned' => 'Asignados a mí',
+            'collaboration', 'assigned' => 'Mis tareas pendientes',
             'returned_correction' => 'Devueltos para corregir',
             'my_drafts' => 'Mis borradores',
             'authorized' => 'Documentos autorizados',
             default => null,
         };
+    }
+
+    private function unitPending(Builder $query, User $user): bool
+    {
+        if (! $user->isResponsibleForUnit((int) $user->organizational_unit_id)) {
+            $query->whereRaw('1 = 0');
+
+            return true;
+        }
+
+        $query->whereNotIn('general_status', [DocumentStatus::DRAFT->value, DocumentStatus::ANNULLED->value])
+            ->whereHas('recipients', fn (Builder $recipients) => $this->pendingUnitRecipients($recipients, $user));
+
+        return true;
+    }
+
+    /** @param Builder<DocumentRecipient> $recipients */
+    public function pendingUnitRecipients(Builder $recipients, User $user): void
+    {
+        $this->targetedTo($recipients, $user);
+        $recipients->where(fn (Builder $pending) => $pending
+            ->where('status', DocumentRecipientStatus::SENT->value)
+            ->orWhere(fn (Builder $formal) => $formal->where('requires_response', true)
+                ->whereIn('status', [DocumentRecipientStatus::RECEIVED->value, DocumentRecipientStatus::IN_REVIEW->value])));
     }
 
     /** @param Builder<Document> $query */
@@ -87,7 +107,11 @@ class DocumentWorkQueryService
                     $this->targetedTo($recipients, $user);
                 });
 
-                if (in_array($role, [RoleName::CAREER_HEAD, RoleName::SECRETARY], true)) {
+                if ($role?->canReviewInternally()) {
+                    $attention->orWhereHas('recipients.reviewTasks', fn (Builder $tasks) => $tasks->assignedTo($user)->pending());
+                }
+
+                if ($role?->isUnitResponsible() || $role === RoleName::SECRETARY) {
                     $attention->orWhere(function (Builder $returned) use ($user, $role): void {
                         $returned
                             ->where('general_status', DocumentStatus::RETURNED->value)
@@ -109,6 +133,13 @@ class DocumentWorkQueryService
         array $statuses,
         bool $requiresResponse = false,
     ): bool {
+        if ($requiresResponse && ! $user->hasInstitutionalGlobalScope()
+            && ! $user->isResponsibleForUnit((int) $user->organizational_unit_id)) {
+            $query->whereRaw('1 = 0');
+
+            return true;
+        }
+
         $query->where('general_status', '!=', DocumentStatus::ANNULLED->value)
             ->whereHas('recipients', function (Builder $recipients) use ($user, $statuses, $requiresResponse): void {
                 $recipients->whereIn('status', array_map(
@@ -130,9 +161,7 @@ class DocumentWorkQueryService
     private function assignedTo(Builder $query, User $user): bool
     {
         $query->where('general_status', '!=', DocumentStatus::ANNULLED->value)
-            ->whereHas('recipients', fn (Builder $recipients) => $recipients
-                ->where('status', DocumentRecipientStatus::IN_REVIEW->value)
-                ->where('current_handler_id', $user->getKey()));
+            ->whereHas('recipients.reviewTasks', fn (Builder $tasks) => $tasks->assignedTo($user)->pending());
 
         return true;
     }
@@ -171,19 +200,15 @@ class DocumentWorkQueryService
             return;
         }
 
-        $recipients->where(function (Builder $target) use ($user): void {
-            $target->where('user_id', $user->getKey());
-
-            if ($user->hasAnyRole([
-                RoleName::CAREER_HEAD->value,
-                RoleName::SECRETARY->value,
-                RoleName::SECRETARY_ASSISTANT->value,
-            ])) {
-                $target->orWhere(function (Builder $unit) use ($user): void {
-                    $unit->whereNull('user_id')
-                        ->where('unit_id', $user->organizational_unit_id);
-                });
-            }
-        });
+        $recipients->where('unit_id', $user->organizational_unit_id)
+            ->where(function (Builder $destinations) use ($user): void {
+                $destinations->where('user_id', $user->getKey());
+                if ($user->isResponsibleForUnit((int) $user->organizational_unit_id)) {
+                    $destinations->orWhereNull('user_id')->orWhere('requires_response', true);
+                } elseif ($user->roleName() === RoleName::SECRETARY) {
+                    $destinations->orWhere(fn (Builder $copy) => $copy
+                        ->whereNull('user_id')->where('requires_response', false));
+                }
+            });
     }
 }

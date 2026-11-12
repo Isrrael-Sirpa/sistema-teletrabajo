@@ -5,7 +5,7 @@
                 <a href="{{ route('delegations.index') }}" class="inline-flex min-h-11 items-center text-sm font-semibold text-blue-800 hover:underline">← Volver a delegaciones</a>
                 <p class="ft-eyebrow">Continuidad de la atención</p>
                 <h1 class="ft-page-title">Nueva delegación de Jefatura</h1>
-                <p class="ft-page-description">Autorice a una Secretaria para atender funciones de Jefatura durante un período definido. Su rol permanente no cambiará.</p>
+                <p class="ft-page-description">Autorice a una Secretaria para atender funciones de apoyo durante un período definido. La recepción de la unidad y las decisiones oficiales corresponden al Jefe de Carrera.</p>
                 <p class="ft-field-help">Complete todos los campos y seleccione al menos una función.</p>
             </div>
         </header>

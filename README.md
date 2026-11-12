@@ -6,7 +6,7 @@ Plataforma web institucional para la Facultad de Tecnología de la Universidad M
 
 - Fase 0: análisis arquitectónico aprobado y cerrado.
 - Fase 1: base Laravel implementada, probada y documentada.
-- Fase 2: esquema inicial implementado y validado en PostgreSQL 18.3.
+- Fase 2: esquema relacional institucional implementado y validado en MySQL 8.4 (Laragon) con todas las tablas del dominio nombradas en español.
 - Fase 3: autenticación básica implementada, probada y documentada.
 - Fase 4: roles y permisos implementados con RBAC y validados en PostgreSQL.
 - Fase 5: Facultad, Kardex y CRUD dinámico de carreras implementados y validados.

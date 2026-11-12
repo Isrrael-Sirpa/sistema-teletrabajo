@@ -43,7 +43,7 @@ final class RbacCatalog
     {
         $allPermissions = array_column(PermissionName::cases(), 'value');
 
-        return [
+        $roles = [
             RoleName::ADMINISTRATOR->value => $allPermissions,
             RoleName::CO_ADMINISTRATOR->value => $allPermissions,
             RoleName::CAREER_HEAD->value => self::values([
@@ -87,9 +87,6 @@ final class RbacCatalog
                 PermissionName::DOCUMENTS_SEND,
                 PermissionName::DOCUMENTS_RECEIVE,
                 PermissionName::DOCUMENTS_REVIEW,
-                PermissionName::DOCUMENTS_APPROVE,
-                PermissionName::DOCUMENTS_RETURN,
-                PermissionName::DOCUMENTS_REJECT,
                 PermissionName::DOCUMENTS_DOWNLOAD,
                 PermissionName::DOCUMENTS_VERSION,
                 PermissionName::DOCUMENTS_COMMENT,
@@ -116,6 +113,13 @@ final class RbacCatalog
                 PermissionName::DOCUMENTS_DOWNLOAD,
             ]),
         ];
+
+        $roles[RoleName::KARDEX_HEAD->value] = array_values(array_diff(
+            $roles[RoleName::CAREER_HEAD->value],
+            [PermissionName::DELEGATIONS_MANAGE_UNIT->value],
+        ));
+
+        return $roles;
     }
 
     /**

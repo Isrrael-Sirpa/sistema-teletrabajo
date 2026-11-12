@@ -99,7 +99,7 @@ class PostgreSqlDocumentRecipientTest extends TestCase
             'recipient_type' => 'person',
             'user_id' => $target->id,
             'unit_id' => $origin->id,
-            'requires_response' => true,
+            'requires_response' => false,
             'lock_version' => 0,
         ]);
 

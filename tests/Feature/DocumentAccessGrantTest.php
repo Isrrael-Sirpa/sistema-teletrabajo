@@ -31,7 +31,7 @@ class DocumentAccessGrantTest extends TestCase
     {
         parent::setUp();
         $this->seed([AuthorizationSeeder::class, DocumentTypeSeeder::class]);
-        Storage::fake('documents');
+        Storage::fake('documentos');
     }
 
     public function test_admin_can_grant_view_or_download_and_co_admin_can_grant(): void
@@ -58,9 +58,9 @@ class DocumentAccessGrantTest extends TestCase
             'permission' => 'view',
         ])->assertRedirect();
 
-        $this->assertDatabaseHas('document_access_grants', ['user_id' => $viewExtra->id, 'permission' => 'view']);
-        $this->assertDatabaseHas('document_access_grants', ['user_id' => $downloadExtra->id, 'permission' => 'download']);
-        $this->assertDatabaseHas('document_access_grants', ['user_id' => $coExtra->id, 'granted_by' => $coAdmin->id]);
+        $this->assertDatabaseHas('concesiones_acceso_documentos', ['user_id' => $viewExtra->id, 'permission' => 'view']);
+        $this->assertDatabaseHas('concesiones_acceso_documentos', ['user_id' => $downloadExtra->id, 'permission' => 'download']);
+        $this->assertDatabaseHas('concesiones_acceso_documentos', ['user_id' => $coExtra->id, 'granted_by' => $coAdmin->id]);
     }
 
     public function test_head_can_grant_only_to_extra_in_own_career_and_related_document(): void
@@ -130,7 +130,7 @@ class DocumentAccessGrantTest extends TestCase
             ])->assertForbidden();
         }
 
-        $this->assertDatabaseCount('document_access_grants', 0);
+        $this->assertDatabaseCount('concesiones_acceso_documentos', 0);
     }
 
     public function test_inactive_user_cannot_receive_a_new_grant(): void
@@ -143,7 +143,7 @@ class DocumentAccessGrantTest extends TestCase
             'permission' => 'view',
         ])->assertSessionHasErrors('user_id');
 
-        $this->assertDatabaseCount('document_access_grants', 0);
+        $this->assertDatabaseCount('concesiones_acceso_documentos', 0);
     }
 
     public function test_view_and_download_have_distinct_private_file_authority(): void
@@ -195,7 +195,7 @@ class DocumentAccessGrantTest extends TestCase
         $this->assertNotNull($grant->revoked_at);
         $this->assertSame($admin->id, $grant->revoked_by);
         $this->assertSame('Finalizó la necesidad institucional.', $grant->revocation_reason);
-        $this->assertDatabaseCount('document_access_grants', 1);
+        $this->assertDatabaseCount('concesiones_acceso_documentos', 1);
         $this->actingAs($extra)->get(route('documents.show', $document))->assertForbidden();
     }
 
@@ -228,7 +228,7 @@ class DocumentAccessGrantTest extends TestCase
         $this->actingAs($admin)->patch(route('documents.access-grants.update', [$document, $download]), [
             'permission' => 'view',
         ])->assertRedirect();
-        $this->assertDatabaseCount('document_access_grants', 3);
+        $this->assertDatabaseCount('concesiones_acceso_documentos', 3);
         $this->assertSame(DocumentAccessPermission::VIEW, DocumentAccessGrant::query()->effective()->sole()->permission);
     }
 
@@ -243,7 +243,7 @@ class DocumentAccessGrantTest extends TestCase
             'permission' => 'download',
         ])->assertSessionHasErrors('user_id');
 
-        $this->assertDatabaseCount('document_access_grants', 1);
+        $this->assertDatabaseCount('concesiones_acceso_documentos', 1);
     }
 
     public function test_discarded_document_cannot_be_revived_by_a_grant(): void
@@ -259,7 +259,7 @@ class DocumentAccessGrantTest extends TestCase
             'permission' => 'download',
         ])->assertNotFound();
         $this->assertFalse(Document::query()->visibleTo($extra)->whereKey($document->id)->exists());
-        $this->assertDatabaseHas('document_access_grants', ['id' => $grant->id]);
+        $this->assertDatabaseHas('concesiones_acceso_documentos', ['id' => $grant->id]);
     }
 
     public function test_grant_from_another_document_cannot_be_changed_or_revoked(): void
@@ -290,7 +290,7 @@ class DocumentAccessGrantTest extends TestCase
         $this->assertFalse(Gate::forUser($extra)->allows('send', $document));
         $this->assertFalse(Gate::forUser($extra)->allows('manageRecipients', $document));
         $this->assertFalse(Gate::forUser($extra)->allows('manageFiles', $document));
-        $this->assertDatabaseCount('document_recipients', 0);
+        $this->assertDatabaseCount('destinatarios_documentos', 0);
     }
 
     public function test_detail_selector_shows_only_eligible_extras_for_local_manager(): void
@@ -396,11 +396,11 @@ class DocumentAccessGrantTest extends TestCase
             'version_number' => 1,
             'uploaded_by' => $uploader->id,
         ]);
-        Storage::disk('documents')->put('tests/informe.pdf', 'contenido');
+        Storage::disk('documentos')->put('tests/informe.pdf', 'contenido');
 
         return DocumentFile::query()->create([
             'document_version_id' => $version->id,
-            'disk' => 'documents',
+            'disk' => 'documentos',
             'path' => 'tests/informe.pdf',
             'original_name' => 'informe.pdf',
             'stored_name' => 'informe.pdf',

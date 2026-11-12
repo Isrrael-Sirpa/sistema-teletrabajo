@@ -8,7 +8,8 @@
     $canObtainFiles = Gate::allows('downloadFile', $document);
     $ownRecipient = $document->recipients
         ->filter(fn ($recipient) => $recipient->user_id === $viewer->id
-            || ($recipient->user_id === null && $recipient->unit_id === $viewer->organizational_unit_id))
+            || ($recipient->unit_id === $viewer->organizational_unit_id
+                && ($recipient->user_id === null || ($isUnitResponsible && $recipient->requires_response))))
         ->sortByDesc(fn ($recipient) => (int) $recipient->requires_response)
         ->first();
     $isSenderContext = $isOriginViewer && ! $ownRecipient && ! $viewer->hasInstitutionalGlobalScope();
@@ -93,7 +94,7 @@
                 @elseif ($isSenderContext)
                     Documento enviado.
                 @elseif ($ownRecipient && ! $ownRecipient->requires_response)
-                    Copia informativa para {{ $ownRecipient->user_id ? 'usted' : 'su carrera' }}.
+                    Copia informativa para {{ $ownRecipient->user_id ? 'usted' : ($ownRecipient->unit->type === App\Enums\OrganizationalUnitType::CAREER ? 'su carrera' : 'su unidad') }}.
                 @elseif ($ownRecipient)
                     @switch ($ownRecipient->status)
                         @case (App\Enums\DocumentRecipientStatus::SENT) Nuevo documento @break
@@ -110,7 +111,7 @@
             </h2>
             <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
                 @if ($isSenderContext && $document->general_status === App\Enums\DocumentStatus::RETURNED)
-                    Una carrera solicitó una corrección. Revise sus observaciones antes de preparar la nueva versión.
+                    Una unidad destinataria solicitó una corrección. Revise sus observaciones antes de preparar la nueva versión.
                 @elseif ($isSenderContext && $document->general_status === App\Enums\DocumentStatus::REJECTED)
                     Se registró un rechazo. Consulte el seguimiento y el historial para conocer la decisión.
                 @elseif ($isSenderContext && $document->general_status === App\Enums\DocumentStatus::ANNULLED)
@@ -122,7 +123,12 @@
                 @elseif ($ownRecipient)
                     @switch ($ownRecipient->status)
                         @case (App\Enums\DocumentRecipientStatus::SENT)
-                            Este documento fue enviado a {{ $ownRecipient->user_id ? 'usted' : 'su carrera' }}.
+                            Este documento fue enviado a {{ match (true) {
+                                $ownRecipient->user_id === $viewer->id => 'usted',
+                                $ownRecipient->user_id !== null => 'una persona de su unidad',
+                                $ownRecipient->unit->type === App\Enums\OrganizationalUnitType::CAREER => 'su carrera',
+                                default => 'su unidad',
+                            } }}.
                             {{ $summaryAction === 'receive' ? 'Puede recibirlo ahora.' : 'Puede consultar sus archivos y seguimiento.' }}
                             @break
                         @case (App\Enums\DocumentRecipientStatus::RECEIVED)
@@ -174,17 +180,22 @@
                     <a href="#files-title" data-file-viewer-open="{{ $documentFiles->first()->public_id }}" aria-haspopup="dialog" class="ft-button-secondary">Visualizar archivos</a>
                 @endif
                 @if ($summaryAction)
-                    <form method="POST" action="{{ route('documents.recipients.transition', [$document, $ownRecipient, $summaryAction]) }}" @if ($summaryAction === 'approve') onsubmit="return confirm('¿Desea aprobar este documento? La decisión quedará registrada en el historial.');" @endif>
+                    <form id="destino-{{ $ownRecipient->id }}" tabindex="-1" class="scroll-mt-24" method="POST" action="{{ route('documents.recipients.transition', [$document, $ownRecipient, $summaryAction]) }}" @if ($summaryAction === 'approve') onsubmit="return confirm('¿Desea aprobar este documento? La decisión quedará registrada en el historial.');" @endif>
                         @csrf
                         @method('PATCH')
                         <input type="hidden" name="document_lock_version" value="{{ $document->lock_version }}">
                         <input type="hidden" name="recipient_lock_version" value="{{ $ownRecipient->lock_version }}">
                         <button type="submit" class="ft-button-primary">{{ match ($summaryAction) {
                             'receive' => $ownRecipient->requires_response ? 'Recibir documento' : 'Registrar recepción de copia',
-                            'start_review' => 'Iniciar revisión',
+                            'start_review' => 'Iniciar revisión oficial',
                             'approve' => 'Aprobar documento',
                         } }}</button>
                     </form>
+                @endif
+                @if ($assignableDestinations->isNotEmpty())
+                    <a href="#revisiones" class="ft-button-secondary">Asignar revisión</a>
+                @elseif ($reviewTasks->isNotEmpty())
+                    <a href="#revisiones" class="ft-button-secondary">Ver revisiones internas</a>
                 @endif
                 <a href="#recipients-title" class="{{ $summaryAction ? 'ft-button-secondary' : 'ft-button-primary' }}">Ver seguimiento</a>
                 @if ($isSenderContext && $document->general_status === App\Enums\DocumentStatus::RETURNED)
@@ -221,7 +232,7 @@
     @endif
 
     @unless ($isDraft)
-        <details class="ft-card mt-6 p-5 sm:p-7">
+        <details @if ($taskOnly) open @endif class="ft-card mt-6 p-5 sm:p-7">
             <summary id="document-data-title" class="text-lg font-bold text-slate-950">Información del documento <span class="ml-2 text-sm font-normal text-slate-600">(ver detalles)</span></summary>
     @else
         <section class="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7" aria-labelledby="document-data-title">
@@ -335,10 +346,6 @@
                                 </td>
                                 <td role="cell" data-label="Finalidad" class="px-4 py-4">
                                     @if ($canManageRecipients)
-                                        @php
-                                            $canRequirePersonalResponse = ! $recipient->user
-                                                || $recipient->user->roleName()?->canBeFormalPersonalDocumentRecipient();
-                                        @endphp
                                         <form method="POST" action="{{ route('documents.recipients.update', $document) }}" data-recipient-operation="update" class="flex flex-wrap items-center gap-2">
                                             @csrf
                                             @method('PATCH')
@@ -346,7 +353,7 @@
                                             <input type="hidden" name="lock_version" value="{{ $document->lock_version }}">
                                             <label class="sr-only" for="requires_response_{{ $recipient->id }}">Finalidad para {{ $recipient->user?->name ?? $recipient->unit->name }}</label>
                                             <select id="requires_response_{{ $recipient->id }}" name="requires_response" class="min-h-10 rounded-lg border-slate-300 py-2 text-sm focus:border-blue-600 focus:ring-blue-600">
-                                                <option value="1" @selected($recipient->requires_response) @disabled(! $canRequirePersonalResponse)>Destinatario principal</option>
+                                                <option value="1" @selected($recipient->requires_response) @disabled($recipient->user_id !== null)>Destinatario principal</option>
                                                 <option value="0" @selected(! $recipient->requires_response)>Copia informativa</option>
                                             </select>
                                             <button type="submit" class="inline-flex min-h-10 items-center rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50">Actualizar</button>
@@ -399,7 +406,7 @@
                                             @method('PATCH')
                                             <input type="hidden" name="document_lock_version" value="{{ $document->lock_version }}">
                                             <input type="hidden" name="recipient_lock_version" value="{{ $recipient->lock_version }}">
-                                            <button type="submit" class="ft-button-primary">Iniciar revisión</button>
+                                            <button type="submit" class="ft-button-primary">Iniciar revisión oficial</button>
                                         </form>
                                     @endcan
 
@@ -456,16 +463,16 @@
         @if ($canManageRecipients)
             <div class="mt-6 border-t border-slate-200 pt-6">
                 <h3 class="text-base font-bold text-slate-950">Destinatarios principales</h3>
-                <p class="mt-1 text-sm text-slate-600">Seleccione una o varias carreras que deben atender este documento. La carrera es el destino institucional; no necesita elegir a su Jefe, Secretaria o Auxiliar.</p>
+                <p class="mt-1 text-sm text-slate-600">Seleccione las carreras o Kardex que deben responder al documento. Cada unidad lo recibirá a través de su responsable.</p>
                 <form method="POST" action="{{ route('documents.recipients.store', $document) }}" data-multi-career-form class="mt-4 rounded-xl border border-blue-200 bg-blue-50/40 p-4">
                     @csrf
                     <input type="hidden" name="lock_version" value="{{ $document->lock_version }}" data-multi-career-lock-version>
-                    <label for="career_search" class="block text-sm font-bold text-slate-800">Buscar carrera</label>
+                    <label for="career_search" class="block text-sm font-bold text-slate-800">Buscar carrera o Kardex</label>
                     <input id="career_search" type="search" data-career-search placeholder="Escriba el nombre o la sigla" class="mt-2 block min-h-11 w-full rounded-lg border-slate-300 shadow-sm focus:border-blue-600 focus:ring-blue-600">
                     <fieldset class="mt-4">
-                        <legend class="sr-only">Carreras destinatarias principales</legend>
+                        <legend class="sr-only">Unidades destinatarias principales</legend>
                         <div data-career-options class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                            @foreach ($recipientUnits->filter(fn ($unit) => $unit->type === App\Enums\OrganizationalUnitType::CAREER) as $unit)
+                            @foreach ($recipientUnits as $unit)
                                 @php $existingUnitRecipient = $document->recipients->first(fn ($recipient) => $recipient->user_id === null && $recipient->unit_id === $unit->id); @endphp
                                 <label data-career-option class="flex min-h-12 items-start gap-3 rounded-lg border border-slate-200 bg-white px-3 py-3 text-sm text-slate-900 {{ $existingUnitRecipient ? 'opacity-70' : 'cursor-pointer hover:border-blue-500' }}">
                                     <input type="checkbox" data-career-choice data-career-name="{{ $unit->name }}" value="{{ $unit->id }}" @checked($existingUnitRecipient) @disabled($existingUnitRecipient) class="mt-0.5 rounded border-slate-300 text-blue-700 focus:ring-blue-600">
@@ -474,8 +481,8 @@
                             @endforeach
                         </div>
                     </fieldset>
-                    <p data-career-selection-count aria-live="polite" class="mt-4 text-sm font-semibold text-slate-800">0 carreras seleccionadas.</p>
-                    <button type="submit" data-career-submit disabled class="ft-button-primary mt-4 disabled:cursor-not-allowed disabled:opacity-50">Agregar carreras seleccionadas</button>
+                    <p data-career-selection-count aria-live="polite" class="mt-4 text-sm font-semibold text-slate-800">0 unidades seleccionadas.</p>
+                    <button type="submit" data-career-submit disabled class="ft-button-primary mt-4 disabled:cursor-not-allowed disabled:opacity-50">Agregar unidades seleccionadas</button>
                 </form>
                 <noscript>
                     <form method="POST" action="{{ route('documents.recipients.store', $document) }}" class="mt-4 rounded-xl border border-slate-200 p-4">
@@ -483,14 +490,14 @@
                         <input type="hidden" name="recipient_type" value="unit">
                         <input type="hidden" name="requires_response" value="1">
                         <input type="hidden" name="lock_version" value="{{ $document->lock_version }}">
-                        <label for="single_career" class="block text-sm font-bold">Agregar una carrera sin JavaScript</label>
+                        <label for="single_career" class="block text-sm font-bold">Agregar una unidad destinataria</label>
                         <select id="single_career" name="unit_id" required class="mt-2 block min-h-11 w-full rounded-lg border-slate-300">
-                            <option value="">Seleccione una carrera</option>
-                            @foreach ($recipientUnits->filter(fn ($unit) => $unit->type === App\Enums\OrganizationalUnitType::CAREER) as $unit)
+                            <option value="">Seleccione una unidad</option>
+                            @foreach ($recipientUnits as $unit)
                                 <option value="{{ $unit->id }}">{{ $unit->acronym }} · {{ $unit->name }}</option>
                             @endforeach
                         </select>
-                        <button type="submit" class="ft-button-primary mt-4">Agregar carrera</button>
+                        <button type="submit" class="ft-button-primary mt-4">Agregar unidad</button>
                     </form>
                 </noscript>
             </div>
@@ -587,6 +594,8 @@
         </section>
     @endif
 
+    @include('documents.reviews._section')
+
     @if ($isDraft)
         <section class="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7" aria-labelledby="files-title">
             <h2 id="files-title" class="text-lg font-bold text-slate-950">Archivos adjuntos</h2>
@@ -599,7 +608,7 @@
         <p class="mt-2 text-sm leading-6 text-slate-600">Revise el contenido antes de enviar o tomar una decisión. La visualización y descarga requieren autorización.</p>
 
         @forelse ($document->versions->sortByDesc('version_number') as $version)
-            <div class="mt-5 overflow-hidden rounded-xl border border-slate-200">
+            <div id="version-{{ $version->version_number }}" class="mt-5 scroll-mt-24 overflow-hidden rounded-xl border border-slate-200">
                 <div class="flex flex-wrap items-center justify-between gap-2 bg-slate-50 px-4 py-3">
                     <div class="flex flex-wrap items-center gap-2">
                         <h3 class="text-sm font-bold text-slate-900">Versión {{ $version->version_number }}</h3>

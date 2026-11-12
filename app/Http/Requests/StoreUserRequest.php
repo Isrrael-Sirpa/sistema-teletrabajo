@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use App\Enums\RoleName;
 use App\Enums\UserStatus;
+use App\Models\OrganizationalUnit;
 use App\Models\User;
 use App\Services\UserManagementService;
 use App\Support\InstitutionalPassword;
@@ -35,7 +36,7 @@ class StoreUserRequest extends FormRequest
             'password' => ['required', 'confirmed', InstitutionalPassword::rule()],
             'status' => ['required', Rule::enum(UserStatus::class)],
             'role' => ['required', Rule::enum(RoleName::class), Rule::in($allowedRoles)],
-            'organizational_unit_id' => ['nullable', 'integer', 'exists:organizational_units,id'],
+            'organizational_unit_id' => ['nullable', 'integer', Rule::exists(OrganizationalUnit::class, 'id')],
         ];
     }
 
@@ -51,8 +52,8 @@ class StoreUserRequest extends FormRequest
 
             $role = RoleName::tryFrom($this->string('role')->toString());
 
-            if ($role?->requiresCareer() === true && ! $this->filled('organizational_unit_id')) {
-                $validator->errors()->add('organizational_unit_id', 'Seleccione una carrera para este rol.');
+            if ($role?->requiresUnit() === true && ! $this->filled('organizational_unit_id')) {
+                $validator->errors()->add('organizational_unit_id', 'Seleccione una unidad para este rol.');
             }
         }];
     }

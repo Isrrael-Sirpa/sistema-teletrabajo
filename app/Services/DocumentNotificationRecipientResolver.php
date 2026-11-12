@@ -24,22 +24,18 @@ class DocumentNotificationRecipientResolver
             ->whereKey($recipientIds)
             ->get();
         $personalUsers = $recipients
-            ->pluck('user')
-            ->filter(fn (?User $user): bool => $user?->status === UserStatus::ACTIVE);
+            ->filter(fn (DocumentRecipient $recipient): bool => $recipient->user?->status === UserStatus::ACTIVE
+                && $recipient->user->organizational_unit_id === $recipient->unit_id)
+            ->pluck('user');
         $unitIds = $recipients
-            ->whereNull('user_id')
+            ->filter(fn (DocumentRecipient $recipient): bool => $recipient->user_id === null || $recipient->requires_response)
             ->pluck('unit_id')
             ->unique()
             ->values();
         $unitUsers = $unitIds->isEmpty()
             ? collect()
-            : User::query()
-                ->where('status', UserStatus::ACTIVE->value)
+            : User::query()->documentResponsibles()
                 ->whereIn('organizational_unit_id', $unitIds)
-                ->whereHas('roles', fn ($roles) => $roles->whereIn('name', [
-                    RoleName::CAREER_HEAD->value,
-                    RoleName::SECRETARY->value,
-                ]))
                 ->get();
 
         return $personalUsers
@@ -68,6 +64,7 @@ class DocumentNotificationRecipientResolver
                     ->where('organizational_unit_id', $document->origin_unit_id)
                     ->whereHas('roles', fn ($roles) => $roles->whereIn('name', [
                         RoleName::CAREER_HEAD->value,
+                        RoleName::KARDEX_HEAD->value,
                         RoleName::SECRETARY->value,
                     ]))
                     ->get(),

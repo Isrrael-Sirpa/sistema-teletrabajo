@@ -29,7 +29,7 @@ class UserPolicy
             return true;
         }
 
-        return ($actor->hasRole(RoleName::CAREER_HEAD->value)
+        return ($actor->isResponsibleForUnit((int) $actor->organizational_unit_id)
             && $actor->organizational_unit_id !== null
             && $actor->organizational_unit_id === $target->organizational_unit_id)
             || $this->delegations->can($actor, PermissionName::USERS_VIEW, (int) $target->organizational_unit_id);
@@ -39,7 +39,7 @@ class UserPolicy
     {
         return ($actor->can(PermissionName::USERS_CREATE->value)
             && ($actor->hasInstitutionalGlobalScope() || (
-                $actor->hasRole(RoleName::CAREER_HEAD->value)
+                $actor->isResponsibleForUnit((int) $actor->organizational_unit_id)
                 && $actor->organizational_unit_id !== null
             ))) || $this->delegations->hasAny($actor, PermissionName::USERS_CREATE);
     }
@@ -85,7 +85,7 @@ class UserPolicy
             return ! $target->hasRole(RoleName::ADMINISTRATOR->value);
         }
 
-        return ($actor->hasRole(RoleName::CAREER_HEAD->value)
+        return ($actor->isResponsibleForUnit((int) $actor->organizational_unit_id)
             && $actor->organizational_unit_id !== null
             && $actor->organizational_unit_id === $target->organizational_unit_id
             && $target->roleName()?->isSecondary() === true)
@@ -97,6 +97,6 @@ class UserPolicy
     private function hasManagementScope(User $actor): bool
     {
         return $actor->hasInstitutionalGlobalScope()
-            || ($actor->hasRole(RoleName::CAREER_HEAD->value) && $actor->organizational_unit_id !== null);
+            || ($actor->isResponsibleForUnit((int) $actor->organizational_unit_id) && $actor->organizational_unit_id !== null);
     }
 }

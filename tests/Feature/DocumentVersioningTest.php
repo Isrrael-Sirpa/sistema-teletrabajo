@@ -50,7 +50,7 @@ class DocumentVersioningTest extends TestCase
             DocumentTypeSeeder::class,
         ]);
 
-        Storage::fake('documents');
+        Storage::fake('documentos');
     }
 
     protected function tearDown(): void
@@ -89,9 +89,9 @@ class DocumentVersioningTest extends TestCase
         $this->assertSame(hash('sha256', $contents), $newFile->sha256);
         $this->assertSame('application/pdf', $newFile->detected_mime_type);
         $this->assertStringContainsString('/version-2/', str_replace('\\', '/', $newFile->path));
-        Storage::disk('documents')->assertExists($oldFile->path);
-        Storage::disk('documents')->assertExists($newFile->path);
-        $this->assertDatabaseHas('document_events', [
+        Storage::disk('documentos')->assertExists($oldFile->path);
+        Storage::disk('documentos')->assertExists($newFile->path);
+        $this->assertDatabaseHas('eventos_documentos', [
             'document_id' => $document->id,
             'event_type' => DocumentEventType::DOCUMENT_VERSION_CREATED->value,
             'actor_id' => $creator->id,
@@ -197,7 +197,7 @@ class DocumentVersioningTest extends TestCase
         $sentAt = $document->sent_at;
         $dueAt = $document->due_at;
 
-        DB::table('document_counters')->insert([
+        DB::table('contadores_documentos')->insert([
             'origin_unit_id' => $document->origin_unit_id,
             'year' => now()->year,
             'last_number' => 17,
@@ -228,13 +228,13 @@ class DocumentVersioningTest extends TestCase
         $this->assertSame($code, $document->code);
         $this->assertTrue($sentAt->equalTo($document->sent_at));
         $this->assertTrue($dueAt->equalTo($document->due_at));
-        $this->assertSame(17, DB::table('document_counters')->value('last_number'));
-        $this->assertDatabaseHas('document_events', [
+        $this->assertSame(17, DB::table('contadores_documentos')->value('last_number'));
+        $this->assertDatabaseHas('eventos_documentos', [
             'document_id' => $document->id,
             'event_type' => DocumentEventType::DOCUMENT_RETURNED->value,
             'reason' => 'Falta firma de Jefatura.',
         ]);
-        $this->assertDatabaseHas('document_events', [
+        $this->assertDatabaseHas('eventos_documentos', [
             'document_id' => $document->id,
             'event_type' => DocumentEventType::CORRECTION_SENT->value,
             'from_status' => DocumentStatus::RETURNED->value,
@@ -269,7 +269,7 @@ class DocumentVersioningTest extends TestCase
         ])->assertForbidden();
 
         $this->assertNotNull($oldFile->fresh());
-        Storage::disk('documents')->assertExists($oldFile->path);
+        Storage::disk('documentos')->assertExists($oldFile->path);
     }
 
     public function test_a_second_return_can_create_version_three(): void
@@ -315,7 +315,7 @@ class DocumentVersioningTest extends TestCase
     {
         [$document, $creator] = $this->returnedContext();
         $originalLock = $document->lock_version;
-        $originalFiles = Storage::disk('documents')->allFiles();
+        $originalFiles = Storage::disk('documentos')->allFiles();
         $event = 'eloquent.creating: '.DocumentFile::class;
 
         Event::listen($event, function (): never {
@@ -337,9 +337,9 @@ class DocumentVersioningTest extends TestCase
         }
 
         $this->assertSame(1, $document->versions()->count());
-        $this->assertSame($originalFiles, Storage::disk('documents')->allFiles());
+        $this->assertSame($originalFiles, Storage::disk('documentos')->allFiles());
         $this->assertSame($originalLock, $document->fresh()->lock_version);
-        $this->assertDatabaseMissing('document_events', [
+        $this->assertDatabaseMissing('eventos_documentos', [
             'document_id' => $document->id,
             'event_type' => DocumentEventType::DOCUMENT_VERSION_CREATED->value,
         ]);
@@ -377,7 +377,7 @@ class DocumentVersioningTest extends TestCase
         $origin = $this->career();
         $destination = $this->career();
         $creator = $this->userWithRole(RoleName::SECRETARY, $origin);
-        $destinationUser = $this->userWithRole(RoleName::SECRETARY, $destination);
+        $destinationUser = $this->userWithRole(RoleName::CAREER_HEAD, $destination);
         $document = Document::query()->create([
             'document_type_id' => DocumentType::query()->where('code', 'informe')->sole()->id,
             'origin_unit_id' => $origin->id,
@@ -406,10 +406,10 @@ class DocumentVersioningTest extends TestCase
         ]);
         $oldContents = "%PDF-1.4\nversión original";
         $path = $document->public_id.'/version-1/'.Str::uuid().'.pdf';
-        Storage::disk('documents')->put($path, $oldContents);
+        Storage::disk('documentos')->put($path, $oldContents);
         $file = DocumentFile::query()->create([
             'document_version_id' => $version->id,
-            'disk' => 'documents',
+            'disk' => 'documentos',
             'path' => $path,
             'original_name' => 'informe.pdf',
             'stored_name' => basename($path),

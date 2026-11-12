@@ -12,6 +12,7 @@ use App\Events\DocumentNotificationRequested;
 use App\Models\Document;
 use App\Models\DocumentCounter;
 use App\Models\DocumentRecipient;
+use App\Models\DocumentReviewTask;
 use App\Models\User;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -153,6 +154,11 @@ class DocumentWorkflowService
                 'lock_version' => $locked->lock_version + 1,
                 'updated_at' => $annulledAt,
             ])->save();
+
+            DocumentReviewTask::query()
+                ->whereRelation('recipient', 'document_id', $locked->getKey())
+                ->pending()
+                ->update(['closed_at' => $annulledAt]);
 
             $this->events->record(
                 $locked,
@@ -311,6 +317,7 @@ class DocumentWorkflowService
 
             $this->assertDocumentVersion($lockedDocument, $expectedDocumentVersion);
             $this->assertRecipientVersion($lockedRecipient, $expectedRecipientVersion);
+            $actor = User::query()->lockForUpdate()->findOrFail($actor->getKey());
             Gate::forUser($actor)->authorize(
                 $transition->policyAbility(),
                 [$lockedDocument, $lockedRecipient],
@@ -357,6 +364,12 @@ class DocumentWorkflowService
 
             $lockedRecipient->lock_version++;
             $lockedRecipient->save();
+
+            if (in_array($transition, [DocumentTransition::APPROVE, DocumentTransition::RETURN, DocumentTransition::REJECT], true)) {
+                $lockedRecipient->reviewTasks()
+                    ->pending()
+                    ->update(['closed_at' => $now]);
+            }
 
             $newGeneralStatus = $this->aggregateStatus($lockedDocument);
             $lockedDocument->forceFill([
@@ -430,7 +443,7 @@ class DocumentWorkflowService
 
     private function nextNumber(int $originUnitId, int $year): int
     {
-        DB::table('document_counters')->insertOrIgnore([
+        DocumentCounter::query()->insertOrIgnore([
             'origin_unit_id' => $originUnitId,
             'year' => $year,
             'last_number' => 0,

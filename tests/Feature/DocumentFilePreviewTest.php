@@ -6,6 +6,7 @@ use App\Enums\AuditAction;
 use App\Enums\DocumentConfidentiality;
 use App\Enums\DocumentPriority;
 use App\Enums\DocumentStatus;
+use App\Enums\DocumentTransition;
 use App\Enums\RoleName;
 use App\Models\AuditLog;
 use App\Models\Document;
@@ -17,6 +18,7 @@ use App\Models\DocumentVersion;
 use App\Models\OrganizationalUnit;
 use App\Models\User;
 use App\Services\DocumentFileService;
+use App\Services\DocumentReviewService;
 use App\Services\DocumentWorkflowService;
 use Database\Seeders\AuthorizationSeeder;
 use Database\Seeders\DocumentTypeSeeder;
@@ -36,10 +38,10 @@ class DocumentFilePreviewTest extends TestCase
     {
         parent::setUp();
         $this->seed([AuthorizationSeeder::class, InstitutionalStructureSeeder::class, DocumentTypeSeeder::class]);
-        Storage::fake('documents');
+        Storage::fake('documentos');
     }
 
-    public function test_destination_head_secretary_and_assistant_can_obtain_pdf_but_unrelated_user_cannot(): void
+    public function test_head_and_assigned_reviewers_can_preview_pdf_without_changing_the_workflow(): void
     {
         [$document, $creator, $destination] = $this->context();
         $file = $this->file($document, $creator);
@@ -47,12 +49,27 @@ class DocumentFilePreviewTest extends TestCase
             'document_id' => $document->id, 'unit_id' => $destination->id,
             'requires_response' => true, 'status' => 'prepared', 'lock_version' => 0,
         ]);
-        app(DocumentWorkflowService::class)->send($creator, $document, 0);
+        $head = $this->user(RoleName::CAREER_HEAD, $destination);
+        $secretary = $this->user(RoleName::SECRETARY, $destination);
+        $assistant = $this->user(RoleName::SECRETARY_ASSISTANT, $destination);
+        $workflow = app(DocumentWorkflowService::class);
+        $workflow->send($creator, $document, 0);
+        $workflow->transition($head, $document, $recipient, DocumentTransition::RECEIVE, 1, 1);
+
+        foreach ([$secretary, $assistant] as $reviewer) {
+            $this->actingAs($reviewer)->get($this->inlineUrl($document, $file))->assertForbidden();
+            app(DocumentReviewService::class)->assign($head, $document, $recipient, [
+                'assigned_to' => $reviewer->id,
+                'instructions' => 'Revisar el PDF.',
+                'assignment_key' => (string) Str::uuid(),
+                'recipient_lock_version' => $recipient->fresh()->lock_version,
+            ]);
+        }
+
         $before = $document->fresh()->getAttributes();
         $eventCount = $document->events()->count();
 
-        foreach ([RoleName::CAREER_HEAD, RoleName::SECRETARY, RoleName::SECRETARY_ASSISTANT] as $role) {
-            $actor = $this->user($role, $destination);
+        foreach ([$head, $secretary, $assistant] as $actor) {
             $this->actingAs($actor)->get($this->inlineUrl($document, $file))
                 ->assertOk()->assertHeader('Content-Type', 'application/pdf')
                 ->assertHeader('X-Frame-Options', 'SAMEORIGIN')
@@ -67,7 +84,7 @@ class DocumentFilePreviewTest extends TestCase
         $this->actingAs($outsider)->get($this->inlineUrl($document, $file))
             ->assertForbidden()->assertHeader('X-Frame-Options', 'DENY');
         $this->assertSame($before, $document->fresh()->getAttributes());
-        $this->assertSame('sent', $recipient->fresh()->status->value);
+        $this->assertSame('received', $recipient->fresh()->status->value);
         $this->assertSame($eventCount, $document->events()->count());
         $this->assertSame(3, AuditLog::query()->where('action', AuditAction::FILE_DOWNLOADED->value)->count());
         $this->assertStringNotContainsString($file->path, AuditLog::query()->get()->toJson());
@@ -166,7 +183,7 @@ class DocumentFilePreviewTest extends TestCase
     {
         [$document, $creator] = $this->context();
         $file = $this->file($document, $creator);
-        Storage::disk('documents')->delete($file->path);
+        Storage::disk('documentos')->delete($file->path);
         config(['app.debug' => true]);
 
         foreach (['inline', 'attachment'] as $presentation) {
@@ -233,10 +250,10 @@ class DocumentFilePreviewTest extends TestCase
             ['uploaded_by' => $uploader->id],
         );
         $path = 'tests/privado/'.Str::uuid().'.'.$extension;
-        Storage::disk('documents')->put($path, $contents);
+        Storage::disk('documentos')->put($path, $contents);
 
         return DocumentFile::query()->create([
-            'document_version_id' => $version->id, 'disk' => 'documents', 'path' => $path,
+            'document_version_id' => $version->id, 'disk' => 'documentos', 'path' => $path,
             'original_name' => 'informe.'.$extension, 'stored_name' => basename($path),
             'extension' => $extension, 'detected_mime_type' => $mime, 'size_bytes' => strlen($contents),
             'sha256' => hash('sha256', $contents), 'uploaded_by' => $uploader->id,

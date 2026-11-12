@@ -19,7 +19,7 @@ class ApplicationFoundationTest extends TestCase
     {
         $this->assertSame('America/La_Paz', config('app.timezone'));
         $this->assertSame('es', config('app.locale'));
-        $this->assertSame('documents', config('documents.disk'));
+        $this->assertSame('documentos', config('documents.disk'));
         $this->assertSame(20_480, config('documents.uploads.max_size_kb'));
         $this->assertSame(3, config('documents.deadlines.due_soon_days'));
     }

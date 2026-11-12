@@ -20,7 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const updateCount = () => {
         const selected = choices().filter((choice) => choice.checked && selectable(choice)).length;
-        count.textContent = `${selected} ${selected === 1 ? 'carrera seleccionada' : 'carreras seleccionadas'}.`;
+        count.textContent = `${selected} ${selected === 1 ? 'unidad seleccionada' : 'unidades seleccionadas'}.`;
         submit.disabled = busy || blocked || selected === 0;
     };
     const filter = () => {
@@ -53,7 +53,7 @@ document.addEventListener('DOMContentLoaded', () => {
         disabledBefore.forEach((disabled, control) => { control.disabled = disabled; });
         disabledBefore.clear();
         editor.setAttribute('aria-busy', 'false');
-        submit.textContent = 'Agregar carreras seleccionadas';
+        submit.textContent = 'Agregar unidades seleccionadas';
         if (blocked) lockControls();
         updateCount();
     };
@@ -142,7 +142,7 @@ document.addEventListener('DOMContentLoaded', () => {
         busy = true;
         lockControls();
         if (multiple) submit.textContent = 'Agregando...';
-        showMessage(multiple ? 'Agregando carreras…' : 'Guardando destinatarios…');
+        showMessage(multiple ? 'Agregando unidades…' : 'Guardando destinatarios…');
 
         try {
             if (multiple) {
@@ -152,10 +152,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     data.set('requires_response', '1');
                     await mutate(form, data);
                     completed += 1;
-                    showMessage(`${completed} de ${selected.length} carreras agregadas…`);
+                    showMessage(`${completed} de ${selected.length} unidades agregadas…`);
                 }
                 message = selected.length === 1
-                    ? `✓ ${selected[0].name} agregada correctamente.` : `✓ ${selected.length} carreras agregadas correctamente.`;
+                    ? `✓ ${selected[0].name} se agregó correctamente.` : `✓ ${selected.length} unidades agregadas correctamente.`;
             } else {
                 await mutate(target, data);
                 message = { remove: '✓ Destinatario quitado correctamente.', update: '✓ Destinatario actualizado correctamente.', 'add-copy': '✓ Copia informativa agregada correctamente.' }[target.dataset.recipientOperation];
@@ -167,7 +167,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             const recovery = await recover();
             message = multiple
-                ? `Se agregaron ${completed} de ${selected.length} carreras. ${selected[completed].name} ${error.confirmedFailure ? 'no pudo agregarse' : 'no pudo confirmarse'}. ${error.message} Revise los destinatarios antes de enviar.${recovery}`
+                ? `Se agregaron ${completed} de ${selected.length} unidades. ${selected[completed].name} ${error.confirmedFailure ? 'no pudo agregarse' : 'no pudo confirmarse'}. ${error.message} Revise los destinatarios antes de enviar.${recovery}`
                 : `No se pudo completar la operación. ${error.message} Revise los destinatarios antes de enviar.${recovery}`;
         } finally {
             finish();

@@ -28,6 +28,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Spatie\Permission\Models\Permission;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\TestCase;
 
@@ -68,22 +69,22 @@ class TemporaryDelegationTest extends TestCase
         $administrator = $this->user(RoleName::ADMINISTRATOR);
         $delegation = $this->createDelegation($administrator, permissions: [
             PermissionName::USERS_VIEW,
-            PermissionName::DOCUMENTS_APPROVE,
+            PermissionName::DOCUMENTS_VIEW,
         ]);
 
         $this->assertSame($this->head->id, $delegation->delegator_user_id);
         $this->assertSame($this->secretary->id, $delegation->delegate_user_id);
         $this->assertSame($administrator->id, $delegation->authorized_by);
         $this->assertEqualsCanonicalizing(
-            [PermissionName::USERS_VIEW->value, PermissionName::DOCUMENTS_APPROVE->value],
+            [PermissionName::USERS_VIEW->value, PermissionName::DOCUMENTS_VIEW->value],
             $delegation->permissions->pluck('name')->all(),
         );
-        $this->assertDatabaseHas('audit_logs', [
+        $this->assertDatabaseHas('registros_auditoria', [
             'action' => AuditAction::DELEGATION_CREATED->value,
             'actor_id' => $administrator->id,
             'auditable_id' => $delegation->id,
         ]);
-        $this->assertDatabaseCount('document_events', 0);
+        $this->assertDatabaseCount('eventos_documentos', 0);
     }
 
     public function test_co_administrator_and_titular_head_can_create_with_their_allowed_scope(): void
@@ -134,7 +135,7 @@ class TemporaryDelegationTest extends TestCase
             );
         }
 
-        $this->assertDatabaseCount('temporary_delegations', 0);
+        $this->assertDatabaseCount('delegaciones_temporales', 0);
     }
 
     public function test_delegator_must_be_the_active_titular_head_of_the_same_career(): void
@@ -196,7 +197,7 @@ class TemporaryDelegationTest extends TestCase
             endsAt: $boundary->addDays(2),
         );
         $this->assertSame($boundary->timestamp, $adjacent->starts_at->timestamp);
-        $this->assertDatabaseCount('temporary_delegations', 2);
+        $this->assertDatabaseCount('delegaciones_temporales', 2);
     }
 
     public function test_effectiveness_uses_half_open_dates_and_ignores_stored_status(): void
@@ -241,11 +242,11 @@ class TemporaryDelegationTest extends TestCase
         $this->assertSame($administrator->id, $delegation->revoked_by);
         $this->assertFalse(app(DelegatedAuthorizationService::class)
             ->can($this->secretary, PermissionName::USERS_VIEW, $this->career->id));
-        $this->assertDatabaseHas('temporary_delegation_permissions', [
+        $this->assertDatabaseHas('permisos_delegaciones_temporales', [
             'temporary_delegation_id' => $delegation->id,
             'permission_id' => $permissionId,
         ]);
-        $this->assertDatabaseHas('audit_logs', [
+        $this->assertDatabaseHas('registros_auditoria', [
             'action' => AuditAction::DELEGATION_REVOKED->value,
             'actor_id' => $administrator->id,
             'auditable_id' => $delegation->id,
@@ -257,7 +258,7 @@ class TemporaryDelegationTest extends TestCase
         $administrator = $this->user(RoleName::ADMINISTRATOR);
         $rolesBefore = $this->secretary->getRoleNames()->sort()->values()->all();
         $permissionsBefore = $this->secretary->getAllPermissions()->pluck('name')->sort()->values()->all();
-        $directBefore = DB::table('model_has_permissions')->where('model_type', User::class)
+        $directBefore = DB::table('modelo_tiene_permisos')->where('model_type', User::class)
             ->where('model_id', $this->secretary->id)->count();
         $delegation = $this->createDelegation($administrator, permissions: [PermissionName::USERS_VIEW]);
 
@@ -268,7 +269,7 @@ class TemporaryDelegationTest extends TestCase
             $this->secretary->refresh();
             $this->assertSame($rolesBefore, $this->secretary->getRoleNames()->sort()->values()->all());
             $this->assertSame($permissionsBefore, $this->secretary->getAllPermissions()->pluck('name')->sort()->values()->all());
-            $this->assertSame($directBefore, DB::table('model_has_permissions')->where('model_type', User::class)
+            $this->assertSame($directBefore, DB::table('modelo_tiene_permisos')->where('model_type', User::class)
                 ->where('model_id', $this->secretary->id)->count());
         }
     }
@@ -299,7 +300,7 @@ class TemporaryDelegationTest extends TestCase
             );
         }
 
-        $this->assertDatabaseCount('temporary_delegations', 0);
+        $this->assertDatabaseCount('delegaciones_temporales', 0);
     }
 
     public function test_restricted_visibility_is_equivalent_only_inside_the_delegated_career(): void
@@ -335,7 +336,7 @@ class TemporaryDelegationTest extends TestCase
             ->assertOk()->assertDontSee('Jefatura temporal activa');
     }
 
-    public function test_delegated_secretary_can_receive_and_decide_when_document_capabilities_are_selected(): void
+    public function test_even_a_historical_delegation_cannot_receive_or_decide_for_a_unit(): void
     {
         $administrator = $this->user(RoleName::ADMINISTRATOR);
         $origin = $this->career('Arquitectura', 'ARQ');
@@ -348,12 +349,12 @@ class TemporaryDelegationTest extends TestCase
             'status' => DocumentRecipientStatus::SENT,
             'lock_version' => 1,
         ]);
-        $this->createDelegation($administrator, permissions: [
-            PermissionName::DOCUMENTS_VIEW,
-            PermissionName::DOCUMENTS_RECEIVE,
-            PermissionName::DOCUMENTS_REVIEW,
-            PermissionName::DOCUMENTS_APPROVE,
-        ]);
+        $delegation = $this->createDelegation($administrator, permissions: [PermissionName::DOCUMENTS_VIEW]);
+        $delegation->permissions()->attach(Permission::query()->whereIn('name', [
+            PermissionName::DOCUMENTS_RECEIVE->value,
+            PermissionName::DOCUMENTS_REVIEW->value,
+            PermissionName::DOCUMENTS_APPROVE->value,
+        ])->pluck('id'));
 
         foreach ([RoleName::SECRETARY_ASSISTANT, RoleName::EXTRA] as $role) {
             $this->secretary->syncRoles([$role->value]);
@@ -364,10 +365,11 @@ class TemporaryDelegationTest extends TestCase
         }
         $this->secretary->syncRoles([RoleName::SECRETARY->value]);
 
-        $this->transition($document, $recipient, 'receive')->assertRedirect();
-        $this->transition($document, $recipient, 'start_review')->assertRedirect();
-        $this->transition($document, $recipient, 'approve')->assertRedirect();
-        $this->assertSame(DocumentRecipientStatus::APPROVED, $recipient->fresh()->status);
+        $this->actingAs($this->secretary)->get(route('documents.show', $document))->assertOk();
+        $this->transition($document, $recipient, 'receive')->assertForbidden();
+        $recipient->update(['status' => DocumentRecipientStatus::IN_REVIEW]);
+        $this->transition($document, $recipient, 'approve')->assertForbidden();
+        $this->assertSame(DocumentRecipientStatus::IN_REVIEW, $recipient->fresh()->status);
     }
 
     public function test_revocation_blocks_the_next_delegated_request_without_new_login(): void

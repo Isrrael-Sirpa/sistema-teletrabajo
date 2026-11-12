@@ -5,7 +5,7 @@ import { setImmediate } from 'node:timers/promises';
 import vm from 'node:vm';
 
 const source = readFileSync(new URL('../../resources/js/multi-career-recipients.js', import.meta.url), 'utf8');
-const names = ['Aeronáutica', 'Electromecánica', 'Química Industrial'];
+const names = ['Aeronáutica', 'Electromecánica', 'Kardex'];
 const selector = (name) => `[data-${name}]`;
 
 // Exercise the production event handlers with isolated server snapshots and no network.
@@ -122,7 +122,7 @@ function fixture({ failAt = 0, deferFirst = false } = {}) {
             visibleBeforePosts.push(sections[selector('recipient-list')].childNodes.map((child) => child.textContent));
             assert.equal(Number(data.lock_version), serverVersion);
             if (deferFirst && posts === 1) await new Promise((resolve) => { release = resolve; });
-            if (posts === failAt) return answer('No se pudo agregar esa carrera.');
+            if (posts === failAt) return answer('No se pudo agregar esa unidad.');
             if (data._method === 'DELETE') state = state.filter((row) => row.id !== data.recipient_id);
             else state.push({ id: data.unit_id, main: data.requires_response === '1' });
             serverVersion += 1;
@@ -139,7 +139,7 @@ function fixture({ failAt = 0, deferFirst = false } = {}) {
     };
 }
 
-test('one, two and three careers immediately update the list, counters, selector and all document versions', async () => {
+test('one, two and three units immediately update the list, counters, selector and all document versions', async () => {
     for (const total of [1, 2, 3]) {
         const app = fixture();
         await app.ready;
@@ -147,7 +147,7 @@ test('one, two and three careers immediately update the list, counters, selector
         await app.submitForm();
         assert.equal(app.sections[selector('recipient-list')].childNodes.length, total);
         assert.equal(app.sections[selector('recipient-counts')].childNodes[0].textContent, `${total} ${total === 1 ? 'principal' : 'principales'} · 0 copias`);
-        assert.equal(app.count.textContent, '0 carreras seleccionadas.');
+        assert.equal(app.count.textContent, '0 unidades seleccionadas.');
         assert.equal(app.version.value, String(total));
         assert.equal(app.fileVersion.value, String(total));
         assert.deepEqual(app.requests.map((request) => request.lock_version), Array.from({ length: total }, (_, index) => String(index)));
@@ -156,7 +156,9 @@ test('one, two and three careers immediately update the list, counters, selector
             assert.equal(choice.disabled, true);
             assert.match(choice.option.textContent, /Ya es destinatario principal/);
         });
-        assert.match(app.feedback.textContent, /agregad[ao]s? correctamente/);
+        assert.equal(app.feedback.textContent, total === 1
+            ? '✓ Aeronáutica se agregó correctamente.'
+            : `✓ ${total} unidades agregadas correctamente.`);
         assert.equal(app.search.disabled, false);
         assert.equal(app.submit.disabled, true);
     }
@@ -169,11 +171,11 @@ test('a partial failure preserves the two confirmed additions and leaves the thi
     await app.submitForm();
     assert.equal(app.visibleBeforePosts[2].length, 2);
     assert.equal(app.sections[selector('recipient-list')].childNodes.length, 2);
-    assert.match(app.feedback.textContent, /Se agregaron 2 de 3 carreras.*Química Industrial no pudo agregarse/);
+    assert.match(app.feedback.textContent, /Se agregaron 2 de 3 unidades.*Kardex no pudo agregarse/);
     assert.equal(app.version.value, '2');
     assert.equal(app.choices()[2].disabled, false);
     assert.equal(app.choices()[2].checked, true);
-    assert.equal(app.count.textContent, '1 carrera seleccionada.');
+    assert.equal(app.count.textContent, '1 unidad seleccionada.');
     assert.equal(app.submit.disabled, false);
 });
 
@@ -186,7 +188,7 @@ test('removing a newly rendered recipient restores its option; copies also add a
     assert.equal(app.sections[selector('recipient-list')].childNodes.length, 0);
     assert.equal(app.choices()[0].disabled, false);
     assert.equal(app.choices()[0].checked, false);
-    assert.equal(app.count.textContent, '0 carreras seleccionadas.');
+    assert.equal(app.count.textContent, '0 unidades seleccionadas.');
     assert.equal(app.sections[selector('recipient-send-controls')].childNodes[0].disabled, true);
     assert.equal(app.version.value, '2');
 
@@ -212,6 +214,6 @@ test('loading shows Agregando and blocks double submission until the request fin
     assert.equal(app.requests.length, 1);
     app.release();
     await pending;
-    assert.equal(app.submit.textContent, 'Agregar carreras seleccionadas');
+    assert.equal(app.submit.textContent, 'Agregar unidades seleccionadas');
     assert.equal(app.choices()[1].disabled, false);
 });

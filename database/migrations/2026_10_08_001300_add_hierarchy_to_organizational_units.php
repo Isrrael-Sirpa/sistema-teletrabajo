@@ -9,19 +9,57 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('organizational_units', function (Blueprint $table) {
+        Schema::table('unidades_organizacionales', function (Blueprint $table) {
             $table->foreignId('parent_id')
                 ->nullable()
                 ->after('public_id')
-                ->constrained('organizational_units')
+                ->constrained('unidades_organizacionales')
                 ->restrictOnDelete();
 
             $table->index('parent_id', 'units_parent_id_index');
         });
 
-        if (DB::getDriverName() === 'pgsql') {
+        if (DB::getDriverName() === 'mysql') {
             DB::statement(<<<'SQL'
-                ALTER TABLE organizational_units
+                ALTER TABLE unidades_organizacionales
+                ADD CONSTRAINT units_parent_presence_check CHECK (
+                    (type = 'faculty' AND parent_id IS NULL)
+                    OR (type IN ('career', 'kardex') AND parent_id IS NOT NULL)
+                )
+                SQL);
+
+            DB::unprepared(<<<'SQL'
+                CREATE TRIGGER unidades_parent_type_trigger_ins
+                BEFORE INSERT ON unidades_organizacionales
+                FOR EACH ROW
+                BEGIN
+                    DECLARE parent_type VARCHAR(20);
+                    IF NEW.type <> 'faculty' THEN
+                        SELECT type INTO parent_type FROM unidades_organizacionales WHERE id = NEW.parent_id;
+                        IF parent_type IS NULL OR parent_type <> 'faculty' THEN
+                            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Las carreras y Kardex deben depender de una Facultad.';
+                        END IF;
+                    END IF;
+                END;
+                SQL);
+
+            DB::unprepared(<<<'SQL'
+                CREATE TRIGGER unidades_parent_type_trigger_upd
+                BEFORE UPDATE ON unidades_organizacionales
+                FOR EACH ROW
+                BEGIN
+                    DECLARE parent_type VARCHAR(20);
+                    IF NEW.type <> 'faculty' THEN
+                        SELECT type INTO parent_type FROM unidades_organizacionales WHERE id = NEW.parent_id;
+                        IF parent_type IS NULL OR parent_type <> 'faculty' THEN
+                            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Las carreras y Kardex deben depender de una Facultad.';
+                        END IF;
+                    END IF;
+                END;
+                SQL);
+        } elseif (DB::getDriverName() === 'pgsql') {
+            DB::statement(<<<'SQL'
+                ALTER TABLE unidades_organizacionales
                 ADD CONSTRAINT units_parent_presence_check CHECK (
                     (type = 'faculty' AND parent_id IS NULL)
                     OR (type IN ('career', 'kardex') AND parent_id IS NOT NULL)
@@ -39,7 +77,7 @@ return new class extends Migration
                     END IF;
 
                     SELECT type INTO parent_type
-                    FROM organizational_units
+                    FROM unidades_organizacionales
                     WHERE id = NEW.parent_id;
 
                     IF parent_type IS DISTINCT FROM 'faculty' THEN
@@ -53,7 +91,7 @@ return new class extends Migration
 
                 CREATE TRIGGER organizational_units_parent_type_trigger
                 BEFORE INSERT OR UPDATE OF type, parent_id
-                ON organizational_units
+                ON unidades_organizacionales
                 FOR EACH ROW
                 EXECUTE FUNCTION validate_organizational_unit_parent();
                 SQL);
@@ -62,14 +100,19 @@ return new class extends Migration
 
     public function down(): void
     {
-        if (DB::getDriverName() === 'pgsql') {
+        if (DB::getDriverName() === 'mysql') {
             DB::unprepared(<<<'SQL'
-                DROP TRIGGER IF EXISTS organizational_units_parent_type_trigger ON organizational_units;
+                DROP TRIGGER IF EXISTS unidades_parent_type_trigger_ins;
+                DROP TRIGGER IF EXISTS unidades_parent_type_trigger_upd;
+                SQL);
+        } elseif (DB::getDriverName() === 'pgsql') {
+            DB::unprepared(<<<'SQL'
+                DROP TRIGGER IF EXISTS organizational_units_parent_type_trigger ON unidades_organizacionales;
                 DROP FUNCTION IF EXISTS validate_organizational_unit_parent();
                 SQL);
         }
 
-        Schema::table('organizational_units', function (Blueprint $table) {
+        Schema::table('unidades_organizacionales', function (Blueprint $table) {
             $table->dropForeign(['parent_id']);
             $table->dropIndex('units_parent_id_index');
             $table->dropColumn('parent_id');

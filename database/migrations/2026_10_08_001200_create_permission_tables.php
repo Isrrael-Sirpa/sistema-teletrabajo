@@ -9,7 +9,9 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('permissions', function (Blueprint $table) {
+        $tableNames = config('permission.table_names');
+
+        Schema::create($tableNames['permissions'], function (Blueprint $table) {
             $table->id();
             $table->string('name', 125);
             $table->string('display_name');
@@ -19,7 +21,7 @@ return new class extends Migration
             $table->unique(['name', 'guard_name']);
         });
 
-        Schema::create('roles', function (Blueprint $table) {
+        Schema::create($tableNames['roles'], function (Blueprint $table) {
             $table->id();
             $table->string('name', 125);
             $table->string('display_name');
@@ -30,9 +32,9 @@ return new class extends Migration
             $table->unique(['name', 'guard_name']);
         });
 
-        Schema::create('model_has_permissions', function (Blueprint $table) {
+        Schema::create($tableNames['model_has_permissions'], function (Blueprint $table) use ($tableNames) {
             $table->foreignId('permission_id')
-                ->constrained('permissions')
+                ->constrained($tableNames['permissions'])
                 ->cascadeOnDelete();
             $table->string('model_type');
             $table->unsignedBigInteger('model_id');
@@ -41,9 +43,9 @@ return new class extends Migration
             $table->primary(['permission_id', 'model_id', 'model_type'], 'model_permissions_primary');
         });
 
-        Schema::create('model_has_roles', function (Blueprint $table) {
+        Schema::create($tableNames['model_has_roles'], function (Blueprint $table) use ($tableNames) {
             $table->foreignId('role_id')
-                ->constrained('roles')
+                ->constrained($tableNames['roles'])
                 ->cascadeOnDelete();
             $table->string('model_type');
             $table->unsignedBigInteger('model_id');
@@ -52,21 +54,24 @@ return new class extends Migration
             $table->primary(['role_id', 'model_id', 'model_type'], 'model_roles_primary');
         });
 
-        Schema::create('role_has_permissions', function (Blueprint $table) {
+        Schema::create($tableNames['role_has_permissions'], function (Blueprint $table) use ($tableNames) {
             $table->foreignId('permission_id')
-                ->constrained('permissions')
+                ->constrained($tableNames['permissions'])
                 ->cascadeOnDelete();
             $table->foreignId('role_id')
-                ->constrained('roles')
+                ->constrained($tableNames['roles'])
                 ->cascadeOnDelete();
 
             $table->primary(['permission_id', 'role_id'], 'role_permissions_primary');
             $table->index('role_id');
         });
 
-        if (DB::getDriverName() === 'pgsql') {
-            DB::statement("ALTER TABLE roles ADD CONSTRAINT roles_name_format_check CHECK (name ~ '^[a-z][a-z0-9_]*$')");
-            DB::statement("ALTER TABLE permissions ADD CONSTRAINT permissions_name_format_check CHECK (name ~ '^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$')");
+        if (DB::getDriverName() === 'mysql') {
+            DB::statement("ALTER TABLE {$tableNames['roles']} ADD CONSTRAINT roles_name_format_check CHECK (name REGEXP '^[a-z][a-z0-9_]*$')");
+            DB::statement("ALTER TABLE {$tableNames['permissions']} ADD CONSTRAINT permissions_name_format_check CHECK (name REGEXP '^[a-z][a-z0-9_]*\\\\.[a-z][a-z0-9_]*$')");
+        } elseif (DB::getDriverName() === 'pgsql') {
+            DB::statement("ALTER TABLE {$tableNames['roles']} ADD CONSTRAINT roles_name_format_check CHECK (name ~ '^[a-z][a-z0-9_]*$')");
+            DB::statement("ALTER TABLE {$tableNames['permissions']} ADD CONSTRAINT permissions_name_format_check CHECK (name ~ '^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$')");
         }
 
         app('cache')->store(config('permission.cache.store') !== 'default'
@@ -76,10 +81,12 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('role_has_permissions');
-        Schema::dropIfExists('model_has_roles');
-        Schema::dropIfExists('model_has_permissions');
-        Schema::dropIfExists('roles');
-        Schema::dropIfExists('permissions');
+        $tableNames = config('permission.table_names');
+
+        Schema::dropIfExists($tableNames['role_has_permissions']);
+        Schema::dropIfExists($tableNames['model_has_roles']);
+        Schema::dropIfExists($tableNames['model_has_permissions']);
+        Schema::dropIfExists($tableNames['roles']);
+        Schema::dropIfExists($tableNames['permissions']);
     }
 };

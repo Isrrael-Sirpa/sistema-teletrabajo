@@ -8,6 +8,7 @@ use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\DocumentFileController;
 use App\Http\Controllers\DocumentRecipientController;
 use App\Http\Controllers\DocumentReportController;
+use App\Http\Controllers\DocumentReviewController;
 use App\Http\Controllers\DocumentTypeController;
 use App\Http\Controllers\DocumentWorkflowController;
 use App\Http\Controllers\NotificationController;
@@ -55,6 +56,9 @@ Route::middleware(['auth', 'active.user'])->group(function (): void {
         ->name('notifications.read-all');
     Route::patch('/notificaciones/{notification}/leer', [NotificationController::class, 'markAsRead'])
         ->name('notifications.read');
+
+    Route::get('/mis-tareas', [DocumentReviewController::class, 'index'])->name('reviews.mine');
+    Route::get('/revisiones-de-mi-unidad', [DocumentReviewController::class, 'index'])->name('reviews.unit');
 
     Route::prefix('documentos')->name('documents.')->group(function (): void {
         Route::get('/', [DocumentController::class, 'index'])
@@ -120,6 +124,10 @@ Route::middleware(['auth', 'active.user'])->group(function (): void {
         Route::patch('/{document}/destinatarios/{documentRecipient}/estado/{transition}', [DocumentWorkflowController::class, 'transition'])
             ->whereIn('transition', ['receive', 'start_review', 'approve', 'return', 'reject'])
             ->name('recipients.transition');
+        Route::post('/{document}/destinatarios/{documentRecipient}/revisiones', [DocumentReviewController::class, 'store'])
+            ->name('reviews.store');
+        Route::patch('/{document}/revisiones/{reviewTask}', [DocumentReviewController::class, 'update'])
+            ->name('reviews.update');
     });
 
     Route::prefix('administracion/unidades')->name('units.')->group(function (): void {

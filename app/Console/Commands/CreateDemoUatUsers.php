@@ -6,6 +6,7 @@ use App\Enums\OrganizationalUnitType;
 use App\Enums\RoleName;
 use App\Enums\UserStatus;
 use App\Models\OrganizationalUnit;
+use App\Models\Role;
 use App\Models\User;
 use App\Support\InstitutionalPassword;
 use Illuminate\Console\Command;
@@ -67,12 +68,12 @@ class CreateDemoUatUsers extends Command
                 }
 
                 foreach ([RoleName::CAREER_HEAD, RoleName::SECRETARY] as $role) {
-                    if (! DB::table('roles')->where('name', $role->value)->where('guard_name', 'web')->exists()) {
+                    if (! Role::query()->where('name', $role->value)->where('guard_name', 'web')->exists()) {
                         throw new RuntimeException("Falta el rol institucional {$role->value}.");
                     }
                 }
 
-                $rawAdmin = DB::table('users')->where('id', $admin->id)->sole();
+                $rawAdmin = DB::table((new User)->getTable())->where('id', $admin->id)->sole();
                 $adminFingerprint = hash('sha256', json_encode($rawAdmin, JSON_THROW_ON_ERROR));
                 $created = 0;
                 $existing = 0;
@@ -123,7 +124,7 @@ class CreateDemoUatUsers extends Command
                     }
                 }
 
-                $after = DB::table('users')->where('id', $admin->id)->sole();
+                $after = DB::table((new User)->getTable())->where('id', $admin->id)->sole();
                 if (hash('sha256', json_encode($after, JSON_THROW_ON_ERROR)) !== $adminFingerprint) {
                     throw new RuntimeException('La cuenta del Administrador cambió durante la carga.');
                 }

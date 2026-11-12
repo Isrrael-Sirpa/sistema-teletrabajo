@@ -63,11 +63,13 @@ class UserManagementTest extends TestCase
         $this->actingAs($head)->get(route('users.show', $otherSecretary))->assertForbidden();
     }
 
-    public function test_administrator_can_create_each_of_the_six_roles(): void
+    public function test_administrator_can_create_each_institutional_role(): void
     {
         $administrator = $this->userWithRole(RoleName::ADMINISTRATOR);
+        $kardex = OrganizationalUnit::query()->where('type', OrganizationalUnitType::KARDEX)->sole();
 
         foreach (RoleName::cases() as $index => $role) {
+            $unit = $role === RoleName::KARDEX_HEAD ? $kardex : $this->careerA;
             $response = $this->actingAs($administrator)->post(route('users.store'), [
                 'name' => 'Usuario '.$role->label(),
                 'email' => "rol{$index}@test.local",
@@ -75,13 +77,13 @@ class UserManagementTest extends TestCase
                 'password_confirmation' => 'Clave#Segura2026',
                 'status' => UserStatus::ACTIVE->value,
                 'role' => $role->value,
-                'organizational_unit_id' => $this->careerA->id,
+                'organizational_unit_id' => $unit->id,
             ]);
 
             $created = User::query()->where('email', "rol{$index}@test.local")->firstOrFail();
             $response->assertRedirect(route('users.show', $created));
             $this->assertTrue($created->hasRole($role->value));
-            $this->assertSame($role->isGlobal() ? null : $this->careerA->id, $created->organizational_unit_id);
+            $this->assertSame($role->isGlobal() ? null : $unit->id, $created->organizational_unit_id);
             $this->assertTrue(Hash::check('Clave#Segura2026', $created->password));
         }
     }
@@ -120,11 +122,11 @@ class UserManagementTest extends TestCase
             ->assertSessionHasErrors('organizational_unit_id');
     }
 
-    public function test_unit_roles_require_an_active_career_and_global_roles_store_null_unit(): void
+    public function test_unit_roles_require_an_active_unit_and_global_roles_store_null_unit(): void
     {
         $administrator = $this->userWithRole(RoleName::ADMINISTRATOR);
 
-        foreach ([RoleName::CAREER_HEAD, RoleName::SECRETARY, RoleName::SECRETARY_ASSISTANT, RoleName::EXTRA] as $index => $role) {
+        foreach ([RoleName::CAREER_HEAD, RoleName::KARDEX_HEAD, RoleName::SECRETARY, RoleName::SECRETARY_ASSISTANT, RoleName::EXTRA] as $index => $role) {
             $payload = $this->validPayload($role, null, "sinunidad{$index}@test.local");
 
             $this->actingAs($administrator)->post(route('users.store'), $payload)
@@ -140,17 +142,41 @@ class UserManagementTest extends TestCase
         }
     }
 
-    public function test_kardex_or_an_inactive_career_cannot_be_assigned_to_a_unit_role(): void
+    public function test_unit_responsible_must_match_its_unit_and_team_units_must_be_active(): void
     {
         $administrator = $this->userWithRole(RoleName::ADMINISTRATOR);
         $kardex = OrganizationalUnit::query()->where('type', OrganizationalUnitType::KARDEX)->sole();
         $this->careerB->update(['is_active' => false]);
 
-        foreach ([$kardex, $this->careerB] as $index => $invalidUnit) {
+        foreach ([
+            [RoleName::CAREER_HEAD, $kardex],
+            [RoleName::KARDEX_HEAD, $this->careerA],
+            [RoleName::EXTRA, $this->careerB],
+        ] as $index => [$role, $invalidUnit]) {
             $this->actingAs($administrator)
-                ->post(route('users.store'), $this->validPayload(RoleName::EXTRA, $invalidUnit, "unidadinvalida{$index}@test.local"))
+                ->post(route('users.store'), $this->validPayload($role, $invalidUnit, "unidadinvalida{$index}@test.local"))
                 ->assertSessionHasErrors('organizational_unit_id');
         }
+    }
+
+    public function test_kardex_has_one_active_responsible_who_can_configure_its_team(): void
+    {
+        $administrator = $this->userWithRole(RoleName::ADMINISTRATOR);
+        $kardex = OrganizationalUnit::query()->where('type', OrganizationalUnitType::KARDEX)->sole();
+        $head = $this->userWithRole(RoleName::KARDEX_HEAD, $kardex);
+
+        $this->actingAs($administrator)->get(route('users.create'))->assertSee('Encargado de Kardex')->assertSee($kardex->name);
+        $this->post(route('users.store'), $this->validPayload(RoleName::KARDEX_HEAD, $kardex, 'duplicado@test.local'))
+            ->assertSessionHasErrors('role');
+
+        foreach (['secretaria1@test.local', 'secretaria2@test.local'] as $email) {
+            $this->actingAs($head)->post(route('users.store'), $this->validPayload(RoleName::SECRETARY, $kardex, $email))
+                ->assertSessionHasNoErrors();
+            $this->assertDatabaseHas('usuarios', ['email' => $email, 'organizational_unit_id' => $kardex->id]);
+        }
+
+        $this->post(route('users.store'), $this->validPayload(RoleName::SECRETARY, $this->careerA, 'otra@test.local'))
+            ->assertSessionHasErrors('organizational_unit_id');
     }
 
     public function test_duplicate_email_is_rejected_ignoring_case_and_email_is_normalized(): void
@@ -166,7 +192,7 @@ class UserManagementTest extends TestCase
             ->post(route('users.store'), $this->validPayload(RoleName::EXTRA, $this->careerA, '  NUEVA@TEST.LOCAL  '))
             ->assertRedirect();
 
-        $this->assertDatabaseHas('users', ['email' => 'nueva@test.local']);
+        $this->assertDatabaseHas('usuarios', ['email' => 'nueva@test.local']);
     }
 
     public function test_invalid_role_and_nonexistent_unit_are_rejected(): void
@@ -200,7 +226,7 @@ class UserManagementTest extends TestCase
 
         $this->actingAs($administrator)->patch(route('users.deactivate', $secretary))->assertRedirect();
 
-        $this->assertDatabaseHas('users', ['id' => $secretaryId, 'status' => UserStatus::INACTIVE->value]);
+        $this->assertDatabaseHas('usuarios', ['id' => $secretaryId, 'status' => UserStatus::INACTIVE->value]);
         $this->assertNotNull(User::query()->find($secretaryId));
 
         auth()->logout();

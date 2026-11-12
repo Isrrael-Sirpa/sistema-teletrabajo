@@ -37,7 +37,7 @@ class AuditLogController extends Controller
         $filters = $request->validate([
             'from' => ['nullable', 'date_format:Y-m-d'],
             'to' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:from'],
-            'actor' => ['nullable', 'integer', 'exists:users,id'],
+            'actor' => ['nullable', 'integer', Rule::exists(User::class, 'id')],
             'action' => ['nullable', Rule::enum(AuditAction::class)],
             'resource' => ['nullable', Rule::in(array_keys(self::RESOURCE_TYPES))],
             'result' => ['nullable', Rule::enum(AuditResult::class)],

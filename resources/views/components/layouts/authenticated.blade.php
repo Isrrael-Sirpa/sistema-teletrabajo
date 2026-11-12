@@ -3,11 +3,13 @@
 @php
     $viewer = auth()->user();
     $role = $viewer->roleName();
-    $activeCareer = $careerUnit ?? ($role?->requiresCareer() ? $viewer->organizationalUnit : null);
+    $activeCareer = $careerUnit ?? ($role?->requiresUnit() ? $viewer->organizationalUnit : null);
     $navigationUnreadCount = $unreadNotificationCount ?? $viewer->unreadNotifications()->count();
     $moduleTitle = $title ? str($title)->before(' — ')->toString() : 'Inicio';
     $section = match (true) {
         request()->routeIs('documents.*') => ['Documentos', route('documents.index')],
+        request()->routeIs('reviews.mine') => ['Mis tareas', route('reviews.mine')],
+        request()->routeIs('reviews.unit') => ['Revisiones de mi unidad', route('reviews.unit')],
         request()->routeIs('users.*') => ['Usuarios', route('users.index')],
         request()->routeIs('units.*') => ['Carreras y unidades', route('units.index')],
         request()->routeIs('document-types.*') => ['Tipos documentales', route('document-types.index')],
@@ -41,6 +43,11 @@
                 @can('viewAny', App\Models\Document::class)
                     <p class="ft-nav-label">DOCUMENTOS</p>
                     <x-ui.nav-link :href="route('documents.index')" icon="documents" :active="request()->routeIs('documents.*') && ! request()->routeIs('documents.create')">Documentos</x-ui.nav-link>
+                    @if (App\Models\DocumentReviewTask::canBeAssignedTo($viewer))
+                        <x-ui.nav-link :href="route('reviews.mine')" icon="list" :active="request()->routeIs('reviews.mine')">Mis tareas</x-ui.nav-link>
+                    @elseif ($viewer->isResponsibleForUnit((int) $viewer->organizational_unit_id))
+                        <x-ui.nav-link :href="route('reviews.unit')" icon="list" :active="request()->routeIs('reviews.unit')">Revisiones de mi unidad</x-ui.nav-link>
+                    @endif
                     @can('create', App\Models\Document::class)
                         <x-ui.nav-link :href="route('documents.create')" icon="plus" :active="request()->routeIs('documents.create')">Nuevo documento</x-ui.nav-link>
                     @endcan
@@ -79,7 +86,7 @@
                     <div class="min-w-0">
                         <p class="truncate text-sm font-bold text-slate-900 sm:text-base">{{ $moduleTitle }}</p>
                         @if($activeCareer)
-                            <p class="mt-0.5 flex items-center gap-1.5 truncate text-xs text-slate-600"><span class="ft-career-dot" aria-hidden="true"></span> {{ $careerUnit && request()->routeIs('documents.show') ? 'Origen: ' : 'Carrera de ' }}{{ $activeCareer->name }}</p>
+                            <p class="mt-0.5 flex items-center gap-1.5 truncate text-xs text-slate-600"><span class="ft-career-dot" aria-hidden="true"></span> {{ $careerUnit && request()->routeIs('documents.show') ? 'Origen: ' : ($activeCareer->type === App\Enums\OrganizationalUnitType::CAREER ? 'Carrera de ' : '') }}{{ $activeCareer->name }}</p>
                         @else
                             <p class="mt-0.5 hidden text-xs text-slate-500 sm:block">Facultad de Tecnología · UMSA</p>
                         @endif

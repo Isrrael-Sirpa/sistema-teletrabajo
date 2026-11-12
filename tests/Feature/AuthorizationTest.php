@@ -28,7 +28,7 @@ class AuthorizationTest extends TestCase
             ->get('/_tests/protected-by-permission', fn (): string => 'Acceso autorizado');
     }
 
-    public function test_the_six_institutional_roles_exist_with_spanish_names(): void
+    public function test_the_institutional_roles_exist_with_spanish_names(): void
     {
         $this->assertSame(
             collect(RoleName::cases())->pluck('value')->sort()->values()->all(),
@@ -90,9 +90,9 @@ class AuthorizationTest extends TestCase
 
         $role = Role::findByName(RoleName::SECRETARY->value);
 
-        $this->assertTrue($role->hasPermissionTo(PermissionName::DOCUMENTS_APPROVE->value));
-        $this->assertTrue($role->hasPermissionTo(PermissionName::DOCUMENTS_RETURN->value));
-        $this->assertTrue($role->hasPermissionTo(PermissionName::DOCUMENTS_REJECT->value));
+        $this->assertFalse($role->hasPermissionTo(PermissionName::DOCUMENTS_APPROVE->value));
+        $this->assertFalse($role->hasPermissionTo(PermissionName::DOCUMENTS_RETURN->value));
+        $this->assertFalse($role->hasPermissionTo(PermissionName::DOCUMENTS_REJECT->value));
         $this->assertFalse($role->hasPermissionTo(PermissionName::DOCUMENTS_ANNUL->value));
     }
 
@@ -131,10 +131,12 @@ class AuthorizationTest extends TestCase
 
     public function test_authorization_seeders_are_idempotent(): void
     {
+        $roleHasPermissionsTable = config('permission.table_names.role_has_permissions', 'rol_tiene_permisos');
+
         $initialCounts = [
             'roles' => Role::query()->count(),
             'permissions' => Permission::query()->count(),
-            'assignments' => DB::table('role_has_permissions')->count(),
+            'assignments' => DB::table($roleHasPermissionsTable)->count(),
         ];
 
         $this->seed(AuthorizationSeeder::class);
@@ -142,7 +144,7 @@ class AuthorizationTest extends TestCase
 
         $this->assertSame($initialCounts['roles'], Role::query()->count());
         $this->assertSame($initialCounts['permissions'], Permission::query()->count());
-        $this->assertSame($initialCounts['assignments'], DB::table('role_has_permissions')->count());
+        $this->assertSame($initialCounts['assignments'], DB::table($roleHasPermissionsTable)->count());
     }
 
     public function test_a_user_can_receive_a_role_and_permissions_through_that_role(): void
@@ -152,7 +154,8 @@ class AuthorizationTest extends TestCase
         $user->assignRole(RoleName::SECRETARY->value);
 
         $this->assertTrue($user->hasRole(RoleName::SECRETARY->value));
-        $this->assertTrue($user->can(PermissionName::DOCUMENTS_APPROVE->value));
+        $this->assertTrue($user->can(PermissionName::DOCUMENTS_SEND->value));
+        $this->assertFalse($user->can(PermissionName::DOCUMENTS_APPROVE->value));
         $this->assertFalse($user->can(PermissionName::ROLES_MANAGE->value));
     }
 

@@ -27,6 +27,7 @@ class DocumentRecipientEligibility
             ->whereHas('roles', function (Builder $query): void {
                 $query->whereIn('name', [
                     RoleName::CAREER_HEAD->value,
+                    RoleName::KARDEX_HEAD->value,
                     RoleName::SECRETARY->value,
                     RoleName::SECRETARY_ASSISTANT->value,
                 ]);
@@ -47,13 +48,13 @@ class DocumentRecipientEligibility
             ], true)
             || ! $role?->canBePersonalDocumentRecipient()) {
             throw ValidationException::withMessages([
-                'user_id' => 'Seleccione un Jefe de Carrera, Secretaria o Auxiliar activo de una carrera autorizada.',
+                'user_id' => 'Seleccione una persona activa del equipo de una carrera o Kardex.',
             ]);
         }
 
-        if ($requiresResponse && ! $role->canBeFormalPersonalDocumentRecipient()) {
+        if ($requiresResponse) {
             throw ValidationException::withMessages([
-                'requires_response' => 'Un Auxiliar de Secretaría solo puede agregarse como copia informativa.',
+                'requires_response' => 'Agregue una unidad como destinatario principal. Las personas pueden recibir copias informativas.',
             ]);
         }
     }

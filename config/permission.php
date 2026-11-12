@@ -14,10 +14,10 @@ return [
 
     'table_names' => [
         'roles' => 'roles',
-        'permissions' => 'permissions',
-        'model_has_permissions' => 'model_has_permissions',
-        'model_has_roles' => 'model_has_roles',
-        'role_has_permissions' => 'role_has_permissions',
+        'permissions' => 'permisos',
+        'model_has_permissions' => 'modelo_tiene_permisos',
+        'model_has_roles' => 'modelo_tiene_roles',
+        'role_has_permissions' => 'rol_tiene_permisos',
     ],
 
     'column_names' => [

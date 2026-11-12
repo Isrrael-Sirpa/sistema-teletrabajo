@@ -9,26 +9,28 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('temporary_delegations', function (Blueprint $table): void {
+        $permissionsTable = config('permission.table_names.permissions', 'permisos');
+
+        Schema::table('delegaciones_temporales', function (Blueprint $table): void {
             $table->foreignId('delegator_user_id')
                 ->after('public_id')
-                ->constrained('users')
+                ->constrained('usuarios')
                 ->restrictOnDelete();
             $table->index('delegator_user_id');
         });
 
-        Schema::create('temporary_delegation_permissions', function (Blueprint $table): void {
+        Schema::create('permisos_delegaciones_temporales', function (Blueprint $table) use ($permissionsTable): void {
             $table->foreignId('temporary_delegation_id')
-                ->constrained('temporary_delegations')
+                ->constrained('delegaciones_temporales')
                 ->restrictOnDelete();
             $table->foreignId('permission_id')
-                ->constrained('permissions')
+                ->constrained($permissionsTable)
                 ->restrictOnDelete();
-            $table->timestampTz('created_at')->useCurrent();
+            $table->timestamp('created_at')->useCurrent();
 
             $table->primary(
                 ['temporary_delegation_id', 'permission_id'],
-                'temporary_delegation_permissions_primary',
+                'permisos_delegaciones_temporales_primary',
             );
             $table->index('permission_id');
         });
@@ -36,14 +38,14 @@ return new class extends Migration
 
     public function down(): void
     {
-        if (DB::table('temporary_delegations')->exists()
-            || DB::table('temporary_delegation_permissions')->exists()) {
+        if (DB::table('delegaciones_temporales')->exists()
+            || DB::table('permisos_delegaciones_temporales')->exists()) {
             throw new RuntimeException('No se puede revertir mientras existan delegaciones temporales o capacidades históricas.');
         }
 
-        Schema::dropIfExists('temporary_delegation_permissions');
+        Schema::dropIfExists('permisos_delegaciones_temporales');
 
-        Schema::table('temporary_delegations', function (Blueprint $table): void {
+        Schema::table('delegaciones_temporales', function (Blueprint $table): void {
             $table->dropForeign(['delegator_user_id']);
             $table->dropIndex(['delegator_user_id']);
             $table->dropColumn('delegator_user_id');

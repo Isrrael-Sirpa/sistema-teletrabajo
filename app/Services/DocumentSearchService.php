@@ -6,6 +6,7 @@ use App\Enums\DocumentEventType;
 use App\Enums\DocumentPriority;
 use App\Enums\DocumentStatus;
 use App\Models\Document;
+use App\Models\DocumentEvent;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
@@ -24,10 +25,10 @@ class DocumentSearchService
      * @param  array<string, mixed>  $filters
      * @return Builder<Document>
      */
-    public function query(User $user, array $filters): Builder
+    public function query(User $user, array $filters, bool $includeTasks = true): Builder
     {
         $query = Document::query()
-            ->visibleTo($user)
+            ->visibleTo($user, includeTasks: $includeTasks)
             ->with(['documentType', 'originUnit', 'creator', 'sender']);
 
         $this->applyText($query, (string) ($filters['q'] ?? ''));
@@ -162,10 +163,12 @@ class DocumentSearchService
 
         $versionCreated = DocumentEventType::DOCUMENT_VERSION_CREATED->value;
         $correctionSent = DocumentEventType::CORRECTION_SENT->value;
+        $eventsTable = (new DocumentEvent)->getTable();
+        $docIdCol = (new Document)->qualifyColumn('id');
         $query->where('general_status', DocumentStatus::RETURNED->value)
             ->whereRaw(
-                '(SELECT COALESCE(MAX(version_events.id), 0) FROM document_events AS version_events WHERE version_events.document_id = documents.id AND version_events.event_type = ?) > '
-                .'(SELECT COALESCE(MAX(sent_events.id), 0) FROM document_events AS sent_events WHERE sent_events.document_id = documents.id AND sent_events.event_type = ?)',
+                "(SELECT COALESCE(MAX(version_events.id), 0) FROM {$eventsTable} AS version_events WHERE version_events.document_id = {$docIdCol} AND version_events.event_type = ?) > "
+                ."(SELECT COALESCE(MAX(sent_events.id), 0) FROM {$eventsTable} AS sent_events WHERE sent_events.document_id = {$docIdCol} AND sent_events.event_type = ?)",
                 [$versionCreated, $correctionSent],
             );
     }
@@ -187,7 +190,7 @@ class DocumentSearchService
             $query->orderBy('created_at', $direction);
         }
 
-        return $query->orderByDesc('documents.id');
+        return $query->orderByDesc((new Document)->qualifyColumn('id'));
     }
 
     private function startOfDay(string $date): CarbonImmutable

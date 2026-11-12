@@ -9,7 +9,9 @@ use App\Enums\RoleName;
 use App\Enums\UserStatus;
 use App\Models\Document;
 use App\Models\DocumentAccessGrant;
+use App\Models\DocumentFile;
 use App\Models\DocumentRecipient;
+use App\Models\DocumentReviewTask;
 use App\Models\User;
 use App\Services\DelegatedAuthorizationService;
 
@@ -86,7 +88,7 @@ class DocumentPolicy
             && $this->update($user, $document);
     }
 
-    public function downloadFile(User $user, Document $document): bool
+    public function downloadFile(User $user, Document $document, ?DocumentFile $file = null): bool
     {
         if (! $this->hasCapability($user, PermissionName::DOCUMENTS_DOWNLOAD, $document->origin_unit_id)
             || ! $this->view($user, $document)) {
@@ -95,7 +97,7 @@ class DocumentPolicy
 
         if (Document::query()
             ->whereKey($document->getKey())
-            ->visibleTo($user, false)
+            ->visibleTo($user, includeGrants: false, includeTasks: false)
             ->exists()) {
             return true;
         }
@@ -104,7 +106,10 @@ class DocumentPolicy
             ->effective()
             ->where('user_id', $user->getKey())
             ->where('permission', 'download')
-            ->exists();
+            ->exists()
+            || $document->reviewVersionIdsFor($user)
+                ->when($file, fn ($versions) => $versions->where('document_version_id', $file->document_version_id))
+                ->exists();
     }
 
     public function send(User $user, Document $document): bool
@@ -152,7 +157,7 @@ class DocumentPolicy
             return true;
         }
 
-        if ($user->hasRole(RoleName::CAREER_HEAD->value)) {
+        if ($user->isResponsibleForUnit((int) $user->organizational_unit_id)) {
             return $document->origin_unit_id === $user->organizational_unit_id
                 || $document->recipients()
                     ->where('unit_id', $user->organizational_unit_id)
@@ -191,8 +196,9 @@ class DocumentPolicy
         return $document->general_status !== DocumentStatus::ANNULLED
             && $recipient->document_id === $document->getKey()
             && $recipient->status === DocumentRecipientStatus::SENT
-            && $this->hasCapability($user, PermissionName::DOCUMENTS_RECEIVE, $recipient->unit_id)
-            && $this->canActForRecipient($user, $recipient, PermissionName::DOCUMENTS_RECEIVE);
+            && $user->can(PermissionName::DOCUMENTS_RECEIVE->value)
+            && (($user->isResponsibleForUnit($recipient->unit_id) && ($recipient->user_id === null || $recipient->requires_response))
+                || $this->canAcknowledge($user, $recipient));
     }
 
     public function reviewRecipient(User $user, Document $document, DocumentRecipient $recipient): bool
@@ -201,8 +207,8 @@ class DocumentPolicy
             && $recipient->document_id === $document->getKey()
             && $recipient->requires_response
             && $recipient->status === DocumentRecipientStatus::RECEIVED
-            && $this->hasCapability($user, PermissionName::DOCUMENTS_REVIEW, $recipient->unit_id)
-            && $this->canActForRecipient($user, $recipient, PermissionName::DOCUMENTS_REVIEW);
+            && $user->can(PermissionName::DOCUMENTS_REVIEW->value)
+            && $user->isResponsibleForUnit($recipient->unit_id);
     }
 
     public function approveRecipient(User $user, Document $document, DocumentRecipient $recipient): bool
@@ -250,29 +256,41 @@ class DocumentPolicy
             && $recipient->document_id === $document->getKey()
             && $recipient->requires_response
             && in_array($recipient->status, $allowedStatuses, true)
-            && $this->hasCapability($user, $permission, $recipient->unit_id)
-            && $this->canActForRecipient($user, $recipient, $permission);
+            && $user->can($permission->value)
+            && $user->isResponsibleForUnit($recipient->unit_id);
     }
 
-    private function canActForRecipient(
-        User $user,
-        DocumentRecipient $recipient,
-        PermissionName $permission,
-    ): bool {
-        if ($user->status !== UserStatus::ACTIVE || ! $user->hasAnyRole([
-            RoleName::CAREER_HEAD->value,
-            RoleName::SECRETARY->value,
-        ])) {
-            return false;
-        }
+    private function canAcknowledge(User $user, DocumentRecipient $recipient): bool
+    {
+        return $user->status === UserStatus::ACTIVE
+            && $recipient->unit_id === $user->organizational_unit_id
+            && ($user->roleName() === RoleName::SECRETARY
+                || $user->isResponsibleForUnit($recipient->unit_id))
+            && ($recipient->user_id === $user->getKey()
+                || ($recipient->user_id === null && ! $recipient->requires_response));
+    }
 
-        if ($recipient->user_id !== null) {
-            return $recipient->user_id === $user->getKey()
-                && $recipient->unit_id === $user->organizational_unit_id;
-        }
+    public function assignReview(User $user, Document $document, DocumentRecipient $recipient): bool
+    {
+        return $this->hasOpenReview($document, $recipient)
+            && $user->isResponsibleForUnit($recipient->unit_id);
+    }
 
-        return $recipient->unit_id === $user->organizational_unit_id
-            || $this->delegations->can($user, $permission, $recipient->unit_id);
+    public function submitReview(User $user, Document $document, DocumentRecipient $recipient, DocumentReviewTask $task): bool
+    {
+        return $this->hasOpenReview($document, $recipient)
+            && $task->document_recipient_id === $recipient->getKey()
+            && $task->assigned_to === $user->getKey()
+            && $recipient->unit_id === $user->organizational_unit_id
+            && DocumentReviewTask::canBeAssignedTo($user);
+    }
+
+    private function hasOpenReview(Document $document, DocumentRecipient $recipient): bool
+    {
+        return $document->general_status !== DocumentStatus::ANNULLED
+            && $recipient->document_id === $document->getKey()
+            && $recipient->requires_response
+            && in_array($recipient->status, [DocumentRecipientStatus::RECEIVED, DocumentRecipientStatus::IN_REVIEW], true);
     }
 
     private function canManageCorrectionFromOrigin(User $user, Document $document, PermissionName $permission): bool
@@ -282,10 +300,9 @@ class DocumentPolicy
         }
 
         return ($document->origin_unit_id === $user->organizational_unit_id
-            && $user->hasAnyRole([
-                RoleName::CAREER_HEAD->value,
-                RoleName::SECRETARY->value,
-            ])) || $this->delegations->can($user, $permission, $document->origin_unit_id);
+            && ($user->isResponsibleForUnit($document->origin_unit_id)
+                || $user->hasRole(RoleName::SECRETARY->value)))
+            || $this->delegations->can($user, $permission, $document->origin_unit_id);
     }
 
     private function hasCapability(User $user, PermissionName $permission, int $unitId): bool

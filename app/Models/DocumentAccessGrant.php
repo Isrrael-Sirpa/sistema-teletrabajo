@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 ])]
 class DocumentAccessGrant extends Model
 {
+    protected $table = 'concesiones_acceso_documentos';
     public function document(): BelongsTo
     {
         return $this->belongsTo(Document::class);

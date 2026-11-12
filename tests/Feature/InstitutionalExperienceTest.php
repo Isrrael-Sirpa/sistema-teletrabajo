@@ -26,8 +26,10 @@ class InstitutionalExperienceTest extends TestCase
     public function test_all_roles_have_the_same_institutional_shell_without_new_authority(): void
     {
         $career = OrganizationalUnit::query()->where('acronym', 'AERO')->sole();
+        $kardex = OrganizationalUnit::query()->where('type', 'kardex')->sole();
         foreach (RoleName::cases() as $role) {
-            $user = User::factory()->create(['organizational_unit_id' => $role->requiresCareer() ? $career->id : null]);
+            $unit = $role === RoleName::KARDEX_HEAD ? $kardex : $career;
+            $user = User::factory()->create(['organizational_unit_id' => $role->requiresUnit() ? $unit->id : null]);
             $user->assignRole($role->value);
             $response = $this->actingAs($user)->get(route('dashboard'));
             $response->assertOk()->assertSee('Facultad de Tecnología')->assertSee('UMSA')

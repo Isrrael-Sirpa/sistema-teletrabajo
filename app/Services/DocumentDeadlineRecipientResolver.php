@@ -8,7 +8,6 @@ use App\Enums\DocumentStatus;
 use App\Enums\RoleName;
 use App\Enums\UserStatus;
 use App\Models\Document;
-use App\Models\DocumentRecipient;
 use App\Models\User;
 use Illuminate\Support\Collection;
 
@@ -27,53 +26,17 @@ class DocumentDeadlineRecipientResolver
             );
         }
 
-        $recipients = DocumentRecipient::query()
-            ->with(['user.roles'])
-            ->where('document_id', $document->getKey())
+        $recipientIds = $document->recipients()
             ->where('requires_response', true)
             ->whereIn('status', [
                 DocumentRecipientStatus::SENT->value,
                 DocumentRecipientStatus::RECEIVED->value,
                 DocumentRecipientStatus::IN_REVIEW->value,
             ])
-            ->get();
+            ->pluck('id')
+            ->all();
 
-        $personalUsers = $recipients->pluck('user')->filter();
-        $unitIds = $recipients
-            ->whereNull('user_id')
-            ->pluck('unit_id')
-            ->unique()
-            ->values();
-        $unitUsers = $unitIds->isEmpty()
-            ? collect()
-            : User::query()
-                ->with('roles')
-                ->where('status', UserStatus::ACTIVE->value)
-                ->whereIn('organizational_unit_id', $unitIds)
-                ->whereHas('roles', fn ($roles) => $roles->whereIn('name', [
-                    RoleName::CAREER_HEAD->value,
-                    RoleName::SECRETARY->value,
-                ]))
-                ->get();
-        $handlerIds = $recipients
-            ->pluck('current_handler_id')
-            ->filter()
-            ->unique()
-            ->values();
-        $handlers = $handlerIds->isEmpty()
-            ? collect()
-            : User::query()
-                ->with('roles')
-                ->where('status', UserStatus::ACTIVE->value)
-                ->whereIn('id', $handlerIds)
-                ->whereHas('roles', fn ($roles) => $roles->whereIn('name', [
-                    RoleName::CAREER_HEAD->value,
-                    RoleName::SECRETARY->value,
-                    RoleName::SECRETARY_ASSISTANT->value,
-                ]))
-                ->get();
-
-        $users = $personalUsers->merge($unitUsers)->merge($handlers);
+        $users = $this->notificationRecipients->forDocumentRecipients($document, $recipientIds, 0);
 
         if ($milestone === DocumentDeadlineStatus::OVERDUE) {
             $users = $users->merge(

@@ -191,7 +191,7 @@ class DocumentReportExportTest extends TestCase
                 $this->actingAs($user)->get(route('reports.documents.'.$format))->assertForbidden();
             }
         }
-        $this->assertDatabaseMissing('audit_logs', ['action' => AuditAction::REPORT_EXPORTED->value]);
+        $this->assertDatabaseMissing('registros_auditoria', ['action' => AuditAction::REPORT_EXPORTED->value]);
     }
 
     public function test_xlsx_limit_is_checked_before_the_renderer_runs(): void
@@ -206,7 +206,7 @@ class DocumentReportExportTest extends TestCase
 
         $this->actingAs($admin)->get(route('reports.documents.xlsx'))
             ->assertRedirect()->assertSessionHasErrors('export');
-        $this->assertDatabaseMissing('audit_logs', ['action' => AuditAction::REPORT_EXPORTED->value]);
+        $this->assertDatabaseMissing('registros_auditoria', ['action' => AuditAction::REPORT_EXPORTED->value]);
     }
 
     public function test_xlsx_audit_records_format_and_count_without_report_content_or_search_text(): void
@@ -369,7 +369,7 @@ class DocumentReportExportTest extends TestCase
         foreach ([$extra, $readOnly] as $user) {
             $this->actingAs($user)->get(route('reports.documents.pdf'))->assertForbidden();
         }
-        $this->assertDatabaseMissing('audit_logs', ['action' => AuditAction::REPORT_EXPORTED->value]);
+        $this->assertDatabaseMissing('registros_auditoria', ['action' => AuditAction::REPORT_EXPORTED->value]);
     }
 
     public function test_pdf_limit_is_checked_before_the_renderer_runs(): void
@@ -384,7 +384,7 @@ class DocumentReportExportTest extends TestCase
 
         $this->actingAs($admin)->get(route('reports.documents.pdf'))
             ->assertRedirect()->assertSessionHasErrors('export');
-        $this->assertDatabaseMissing('audit_logs', ['action' => AuditAction::REPORT_EXPORTED->value]);
+        $this->assertDatabaseMissing('registros_auditoria', ['action' => AuditAction::REPORT_EXPORTED->value]);
     }
 
     public function test_pdf_audit_records_format_and_count_without_report_content_or_search_text(): void
@@ -438,7 +438,7 @@ class DocumentReportExportTest extends TestCase
         config(['reports.export_max_rows' => 1]);
         [$admin, $career, $creator] = $this->context();
         $document = $this->document($creator, $career, 'Único documento del conteo inicial');
-        $this->assertDatabaseCount('documents', 1);
+        $this->assertDatabaseCount('documentos', 1);
         $reports = \Mockery::mock(app(DocumentReportService::class))->makePartial();
         $reports->shouldReceive('exportDocuments')->times(3)
             ->andReturn(collect([$document, $document->replicate()]));
@@ -456,7 +456,7 @@ class DocumentReportExportTest extends TestCase
                     'export' => 'La exportación contiene 2 filas. Reduzca el período o aplique filtros para no superar 1.',
                 ]);
         }
-        $this->assertDatabaseMissing('audit_logs', ['action' => AuditAction::REPORT_EXPORTED->value]);
+        $this->assertDatabaseMissing('registros_auditoria', ['action' => AuditAction::REPORT_EXPORTED->value]);
     }
 
     /** @return array{User, OrganizationalUnit, User} */

@@ -3,7 +3,7 @@
     $selectedRole = old('role', $managedUser?->roleName()?->value ?? '');
     $selectedStatus = old('status', $managedUser?->status->value ?? App\Enums\UserStatus::ACTIVE->value);
     $selectedUnit = old('organizational_unit_id', $managedUser?->organizational_unit_id);
-    $requiresCareer = $selectedRole !== '' && ! in_array($selectedRole, [
+    $requiresUnit = $selectedRole !== '' && ! in_array($selectedRole, [
         App\Enums\RoleName::ADMINISTRATOR->value,
         App\Enums\RoleName::CO_ADMINISTRATOR->value,
     ], true);
@@ -73,15 +73,15 @@
         </div>
     </div>
 
-    <div data-unit-section @if (! $requiresCareer) hidden @endif>
-        <label for="organizational_unit_id" class="block text-sm font-semibold text-slate-800">Carrera</label>
-        <select id="organizational_unit_id" name="organizational_unit_id" data-unit-select @required($requiresCareer) @disabled(! $requiresCareer) aria-invalid="{{ $errors->has('organizational_unit_id') ? 'true' : 'false' }}" aria-describedby="unit-help{{ $errors->has('organizational_unit_id') ? ' unit-error' : '' }}" class="mt-2 block min-h-12 w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-base text-slate-950 shadow-sm focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20">
-            <option value="">Seleccione una carrera activa</option>
-            @foreach ($careers as $career)
+    <div data-unit-section @if (! $requiresUnit) hidden @endif>
+        <label for="organizational_unit_id" class="block text-sm font-semibold text-slate-800">Carrera o Kardex</label>
+        <select id="organizational_unit_id" name="organizational_unit_id" data-unit-select @required($requiresUnit) @disabled(! $requiresUnit) aria-invalid="{{ $errors->has('organizational_unit_id') ? 'true' : 'false' }}" aria-describedby="unit-help{{ $errors->has('organizational_unit_id') ? ' unit-error' : '' }}" class="mt-2 block min-h-12 w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-base text-slate-950 shadow-sm focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20">
+            <option value="">Seleccione una unidad activa</option>
+            @foreach ($units as $career)
                 <option value="{{ $career->id }}" @selected((string) $selectedUnit === (string) $career->id)>{{ $career->name }}</option>
             @endforeach
         </select>
-        <p id="unit-help" class="ft-field-help">Jefatura, Secretarías, Auxiliares y usuarios Extra deben pertenecer a una carrera activa.</p>
+        <p id="unit-help" class="ft-field-help">Jefe de Carrera corresponde a una carrera. Encargado de Kardex corresponde a Kardex. Secretarías, Auxiliares y usuarios Extra pueden pertenecer a cualquiera de esas unidades.</p>
         @error('organizational_unit_id')<p id="unit-error" class="ft-field-error">{{ $message }}</p>@enderror
     </div>
 

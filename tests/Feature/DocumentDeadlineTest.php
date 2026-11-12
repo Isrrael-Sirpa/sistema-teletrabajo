@@ -85,7 +85,7 @@ class DocumentDeadlineTest extends TestCase
 
         $result = app(DocumentDeadlineReminderService::class)->process($this->now);
         $this->assertSame(0, $result['evaluated']);
-        $this->assertDatabaseCount('notifications', 0);
+        $this->assertDatabaseCount('notificaciones', 0);
     }
 
     public function test_document_without_due_date_never_enters_queries_or_generates_reminder(): void
@@ -97,7 +97,7 @@ class DocumentDeadlineTest extends TestCase
             ['evaluated' => 0, 'generated' => 0, 'omitted' => 0],
             app(DocumentDeadlineReminderService::class)->process($this->now),
         );
-        $this->assertDatabaseCount('notifications', 0);
+        $this->assertDatabaseCount('notificaciones', 0);
     }
 
     public function test_due_soon_and_overdue_scopes_filter_in_postgresql_ready_queries(): void
@@ -136,13 +136,13 @@ class DocumentDeadlineTest extends TestCase
 
         $result = app(DocumentDeadlineReminderService::class)->process($this->now);
 
-        $this->assertSame(['evaluated' => 1, 'generated' => 2, 'omitted' => 0], $result);
+        $this->assertSame(['evaluated' => 1, 'generated' => 1, 'omitted' => 0], $result);
         $this->assertSame(1, $head->notifications()->count());
-        $this->assertSame(1, $secretary->notifications()->count());
+        $this->assertSame(0, $secretary->notifications()->count());
         $this->assertSame(0, $inactive->notifications()->count());
         $this->assertSame(0, $extra->notifications()->count());
         $this->assertSame(0, $originCreator->notifications()->count());
-        $this->assertDatabaseCount('notifications', 2);
+        $this->assertDatabaseCount('notificaciones', 1);
         $this->assertSame('due_soon', $head->notifications()->sole()->data['deadline_milestone']);
     }
 

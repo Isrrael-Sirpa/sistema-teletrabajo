@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#12304f">
+  <title>Vista previa · Panel de Jefatura</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --navy: #12304f;
+      --navy-2: #173e68;
+      --blue: #2469a5;
+      --blue-soft: #eaf3fb;
+      --ink: #172b3d;
+      --muted: #647487;
+      --line: #e3e9ef;
+      --canvas: #f4f7fa;
+      --white: #fff;
+      --amber: #a45c05;
+      --amber-soft: #fff5e7;
+      --green: #176f4c;
+      --green-soft: #e8f6ef;
+      --red: #a33a3a;
+      --red-soft: #fff0ef;
+      --shadow: 0 12px 32px rgba(27, 51, 74, .07);
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--canvas); color: var(--ink); font: 15px/1.5 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    button, a { font: inherit; }
+    button { color: inherit; }
+    a { color: inherit; text-decoration: none; }
+    .shell { min-height: 100vh; }
+    .sidebar { position: fixed; inset: 0 auto 0 0; z-index: 5; display: flex; width: 258px; flex-direction: column; background: var(--navy); color: #fff; transition: transform .22s ease; }
+    .brand { display: flex; align-items: center; gap: 12px; min-height: 100px; padding: 23px 22px; border-bottom: 1px solid rgba(255,255,255,.12); }
+    .brand-mark { display: grid; width: 45px; height: 45px; flex: 0 0 auto; place-items: center; border: 1px solid rgba(255,255,255,.28); border-radius: 13px; background: rgba(255,255,255,.1); font-size: 14px; font-weight: 800; letter-spacing: -.04em; }
+    .brand-copy strong, .brand-copy span { display: block; }
+    .brand-copy strong { font-size: 13px; line-height: 1.35; }
+    .brand-copy span { margin-top: 4px; color: #c3d8eb; font-size: 11px; }
+    .nav { padding: 22px 13px; }
+    .nav-label { margin: 0 12px 9px; color: #a9c1d8; font-size: 10px; font-weight: 800; letter-spacing: .13em; }
+    .nav-link { display: flex; min-height: 45px; align-items: center; gap: 12px; margin: 3px 0; padding: 0 12px; border: 1px solid transparent; border-radius: 9px; color: #e3edf6; font-size: 13px; font-weight: 600; }
+    .nav-link:hover, .nav-link.active { background: rgba(255,255,255,.12); color: #fff; }
+    .nav-link.active { border-color: rgba(255,255,255,.13); box-shadow: inset 3px 0 #78c7ed; }
+    .nav-icon { display: inline-grid; width: 20px; place-items: center; color: #c7dced; }
+    .nav-count { display: grid; min-width: 22px; height: 22px; margin-left: auto; place-items: center; border-radius: 99px; background: rgba(255,255,255,.16); font-size: 11px; }
+    .side-bottom { margin-top: auto; padding: 17px 20px 21px; border-top: 1px solid rgba(255,255,255,.12); color: #c0d3e4; font-size: 11px; line-height: 1.7; }
+    .side-bottom strong { display: block; color: white; font-size: 12px; }
+    .main { min-height: 100vh; margin-left: 258px; }
+    .topbar { position: sticky; top: 0; z-index: 3; display: flex; height: 72px; align-items: center; justify-content: space-between; gap: 20px; padding: 0 38px; border-bottom: 1px solid var(--line); background: rgba(255,255,255,.94); backdrop-filter: blur(12px); }
+    .crumb strong { display: block; color: var(--ink); font-size: 14px; }
+    .crumb span { display: block; color: var(--muted); font-size: 11px; }
+    .top-actions { display: flex; align-items: center; gap: 14px; }
+    .icon-button { position: relative; display: grid; width: 40px; height: 40px; place-items: center; border: 1px solid transparent; border-radius: 10px; background: transparent; color: #42566a; cursor: pointer; }
+    .icon-button:hover { border-color: var(--line); background: #f8fafc; }
+    .notification-dot { position: absolute; top: 7px; right: 7px; width: 8px; height: 8px; border: 2px solid white; border-radius: 50%; background: #d04e4e; }
+    .profile { display: flex; align-items: center; gap: 10px; padding-left: 14px; border-left: 1px solid var(--line); }
+    .avatar { display: grid; width: 37px; height: 37px; place-items: center; border-radius: 50%; background: #dcebf7; color: #214e75; font-size: 13px; font-weight: 800; }
+    .profile-name strong, .profile-name span { display: block; }
+    .profile-name strong { font-size: 12px; }
+    .profile-name span { color: var(--muted); font-size: 11px; }
+    .menu-button { display: none; }
+    .content { width: min(1440px, 100%); margin: 0 auto; padding: 31px 38px 45px; }
+    .welcome { display: flex; align-items: flex-end; justify-content: space-between; gap: 22px; }
+    .eyebrow { margin: 0 0 5px; color: var(--blue); font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+    h1 { margin: 0; color: #172d43; font-size: clamp(25px, 3vw, 32px); letter-spacing: -.035em; line-height: 1.2; }
+    .welcome p.subtitle { margin: 8px 0 0; color: var(--muted); font-size: 14px; }
+    .scope-pill { display: inline-flex; align-items: center; gap: 8px; margin-top: 13px; padding: 7px 11px; border: 1px solid #dfe8f0; border-radius: 8px; background: white; color: #536679; font-size: 12px; }
+    .scope-dot { width: 7px; height: 7px; border-radius: 50%; background: #3a936c; }
+    .primary-button, .secondary-button { display: inline-flex; min-height: 42px; align-items: center; justify-content: center; gap: 9px; padding: 0 15px; border: 1px solid transparent; border-radius: 9px; cursor: pointer; font-size: 12px; font-weight: 750; transition: .15s ease; }
+    .primary-button { background: var(--navy-2); color: white; box-shadow: 0 3px 9px rgba(23,62,104,.15); }
+    .primary-button:hover { background: #102f53; transform: translateY(-1px); }
+    .secondary-button { border-color: #d8e2ea; background: white; color: var(--navy-2); }
+    .secondary-button:hover { background: #f5f9fc; border-color: #aac5db; }
+    .overview { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 14px; margin-top: 26px; }
+    .metric { display: flex; min-height: 112px; align-items: flex-start; gap: 14px; padding: 18px; border: 1px solid var(--line); border-radius: 13px; background: white; box-shadow: 0 4px 14px rgba(28,53,75,.025); }
+    .metric-icon { display: grid; width: 39px; height: 39px; flex: 0 0 auto; place-items: center; border-radius: 11px; background: var(--blue-soft); color: var(--blue); }
+    .metric-icon.amber { background: var(--amber-soft); color: var(--amber); }
+    .metric-icon.green { background: var(--green-soft); color: var(--green); }
+    .metric-icon.purple { background: #f1edfb; color: #6d55a7; }
+    .metric-copy { min-width: 0; }
+    .metric-copy span { display: block; color: var(--muted); font-size: 11px; font-weight: 650; }
+    .metric-copy strong { display: block; margin-top: 2px; color: #173451; font-size: 28px; letter-spacing: -.04em; line-height: 1.2; }
+    .metric-copy small { display: block; margin-top: 4px; color: #8290a0; font-size: 10px; }
+    .work-grid { display: grid; grid-template-columns: minmax(0,1.58fr) minmax(330px,.92fr); align-items: start; gap: 18px; margin-top: 21px; }
+    .card { overflow: hidden; border: 1px solid var(--line); border-radius: 13px; background: white; box-shadow: var(--shadow); }
+    .card-head { display: flex; min-height: 72px; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--line); }
+    .head-title { display: flex; align-items: center; gap: 11px; }
+    .head-icon { display: grid; width: 35px; height: 35px; flex: 0 0 auto; place-items: center; border-radius: 10px; background: #edf4fa; color: var(--navy-2); }
+    .card-head h2 { margin: 0; color: #1c344a; font-size: 15px; letter-spacing: -.015em; }
+    .card-head p { margin: 2px 0 0; color: var(--muted); font-size: 11px; }
+    .text-link { color: var(--blue); font-size: 11px; font-weight: 750; white-space: nowrap; }
+    .text-link:hover { text-decoration: underline; text-underline-offset: 3px; }
+    .filter-row { display: flex; gap: 8px; overflow-x: auto; padding: 13px 19px; border-bottom: 1px solid #edf1f5; }
+    .filter { display: inline-flex; min-height: 31px; flex: 0 0 auto; align-items: center; gap: 7px; padding: 0 11px; border: 1px solid transparent; border-radius: 7px; background: #f4f7fa; color: #5f7183; cursor: pointer; font-size: 10px; font-weight: 700; }
+    .filter span { display: grid; min-width: 17px; height: 17px; padding: 0 4px; place-items: center; border-radius: 99px; background: rgba(42,67,90,.08); font-size: 9px; }
+    .filter.active { border-color: #c9deee; background: #eaf3fb; color: #205b8d; }
+    .doc-list { margin: 0; padding: 0; list-style: none; }
+    .doc-item { position: relative; padding: 17px 20px 18px 23px; border-bottom: 1px solid #edf1f5; transition: background .15s; }
+    .doc-item:last-child { border-bottom: 0; }
+    .doc-item:hover { background: #fbfdff; }
+    .doc-item::before { position: absolute; inset: 0 auto 0 0; width: 3px; background: #d6e6f3; content: ""; }
+    .doc-item[data-state="assign"]::before { background: #e7a541; }
+    .doc-item[data-state="decision"]::before { background: #65a887; }
+    .doc-top { display: flex; align-items: center; justify-content: space-between; gap: 9px; }
+    .status { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 6px; font-size: 10px; font-weight: 750; }
+    .status::before { width: 6px; height: 6px; border-radius: 50%; background: currentColor; content: ""; }
+    .status.assign { background: var(--amber-soft); color: var(--amber); }
+    .status.review { background: var(--blue-soft); color: #286995; }
+    .status.decision { background: var(--green-soft); color: var(--green); }
+    .doc-code { color: #8996a4; font-size: 10px; font-weight: 650; white-space: nowrap; }
+    .doc-item h3 { margin: 9px 0 4px; color: #1c344a; font-size: 13px; font-weight: 760; line-height: 1.4; }
+    .doc-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 5px 13px; color: #6a7c8d; font-size: 10px; }
+    .doc-meta span { display: inline-flex; align-items: center; gap: 5px; }
+    .doc-bottom { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; }
+    .deadline { display: inline-flex; align-items: center; gap: 5px; color: #738394; font-size: 10px; }
+    .deadline.soon { color: var(--amber); font-weight: 700; }
+    .deadline.late { color: var(--red); font-weight: 750; }
+    .row-action { display: inline-flex; min-height: 34px; align-items: center; gap: 6px; padding: 0 10px; border: 1px solid #d9e4ec; border-radius: 7px; background: white; color: var(--navy-2); cursor: pointer; font-size: 10px; font-weight: 750; white-space: nowrap; }
+    .row-action:hover { border-color: #9dbbd2; background: #f7fbfe; }
+    .empty { display: none; padding: 34px 20px; color: var(--muted); text-align: center; font-size: 12px; }
+    .team-body { padding: 17px 19px 19px; }
+    .task-totals { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+    .task-total { padding: 12px 13px; border: 1px solid #edf0f4; border-radius: 9px; background: #fbfcfd; }
+    .task-total span { display: block; color: #738294; font-size: 10px; font-weight: 650; }
+    .task-total strong { display: inline-block; margin-top: 2px; color: #1a354d; font-size: 24px; line-height: 1.1; }
+    .task-total small { margin-left: 5px; color: #8a97a4; font-size: 9px; }
+    .task-total.done strong { color: var(--green); }
+    .section-mini-title { margin: 18px 0 7px; color: #40556a; font-size: 10px; font-weight: 800; letter-spacing: .035em; text-transform: uppercase; }
+    .person { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid #eff2f5; }
+    .person:last-child { border-bottom: 0; }
+    .person-avatar { display: grid; width: 32px; height: 32px; flex: 0 0 auto; place-items: center; border-radius: 50%; background: #edf2f7; color: #526b81; font-size: 10px; font-weight: 800; }
+    .person-info { min-width: 0; flex: 1; }
+    .person-info strong { display: block; overflow: hidden; color: #2d4358; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+    .person-info span { display: block; color: #8593a1; font-size: 9px; }
+    .task-badge { padding: 4px 7px; border-radius: 6px; background: var(--amber-soft); color: #965809; font-size: 9px; font-weight: 750; white-space: nowrap; }
+    .recent-list { display: grid; gap: 9px; }
+    .recent { display: flex; align-items: flex-start; gap: 9px; }
+    .recent-mark { display: grid; width: 23px; height: 23px; flex: 0 0 auto; place-items: center; border-radius: 50%; background: var(--green-soft); color: var(--green); }
+    .recent-mark.pending { background: var(--amber-soft); color: var(--amber); }
+    .recent-copy { min-width: 0; }
+    .recent-copy strong { display: block; overflow: hidden; color: #344a5f; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+    .recent-copy span { display: block; margin-top: 2px; color: #8794a0; font-size: 9px; }
+    .team-footer { margin-top: 15px; }
+    .team-footer .secondary-button { width: 100%; }
+    .hint { display: flex; align-items: flex-start; gap: 10px; margin-top: 18px; padding: 12px 14px; border: 1px solid #dce9f2; border-radius: 10px; background: #eef6fb; color: #506b80; font-size: 10px; }
+    .hint strong { color: #244a68; }
+    .footer { padding: 17px 38px 24px; color: #8a98a5; font-size: 10px; }
+    .scrim { display: none; }
+    .toast { position: fixed; right: 22px; bottom: 22px; z-index: 20; max-width: min(360px,calc(100vw - 36px)); padding: 12px 16px; border-radius: 10px; background: #173e68; color: white; box-shadow: 0 10px 28px rgba(14,37,61,.25); font-size: 12px; opacity: 0; pointer-events: none; transform: translateY(8px); transition: .2s ease; }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    dialog { width: min(460px,calc(100vw - 28px)); padding: 0; border: 1px solid #dce4ec; border-radius: 15px; box-shadow: 0 24px 70px rgba(14,35,56,.26); }
+    dialog::backdrop { background: rgba(18,38,58,.48); backdrop-filter: blur(2px); }
+    .dialog-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 15px; padding: 19px 21px; border-bottom: 1px solid var(--line); }
+    .dialog-head h2 { margin: 0; color: #1c344a; font-size: 17px; }
+    .dialog-head p { margin: 5px 0 0; color: var(--muted); font-size: 11px; }
+    .dialog-body { padding: 20px 21px; }
+    .dialog-body p { margin: 0 0 14px; color: #52677b; font-size: 12px; }
+    .dialog-body p strong { color: #243b50; }
+    .dialog-actions { display: flex; justify-content: flex-end; gap: 9px; padding: 14px 21px 19px; border-top: 1px solid var(--line); }
+    @media (max-width: 1120px) {
+      .content { padding-right: 25px; padding-left: 25px; }
+      .topbar { padding-right: 25px; padding-left: 25px; }
+      .overview { grid-template-columns: repeat(2,minmax(0,1fr)); }
+      .work-grid { grid-template-columns: minmax(0,1.25fr) minmax(300px,.9fr); }
+    }
+    @media (max-width: 820px) {
+      .sidebar { transform: translateX(-100%); box-shadow: 15px 0 38px rgba(10,29,46,.2); }
+      .sidebar.open { transform: translateX(0); }
+      .scrim.show { position: fixed; inset: 0; z-index: 4; display: block; background: rgba(13,31,49,.42); }
+      .main { margin-left: 0; }
+      .menu-button { display: grid; }
+      .topbar { height: 65px; padding: 0 18px; }
+      .content { padding: 25px 18px 35px; }
+      .work-grid { grid-template-columns: 1fr; }
+      .footer { padding-right: 18px; padding-left: 18px; }
+    }
+    @media (max-width: 540px) {
+      .profile-name { display: none; }
+      .profile { padding-left: 8px; }
+      .top-actions { gap: 4px; }
+      .welcome { align-items: flex-start; flex-direction: column; }
+      .welcome > .primary-button { width: 100%; }
+      .overview { gap: 9px; margin-top: 20px; }
+      .metric { min-height: 99px; gap: 9px; padding: 12px 10px; }
+      .metric-icon { width: 32px; height: 32px; border-radius: 9px; }
+      .metric-copy strong { font-size: 24px; }
+      .metric-copy span { font-size: 10px; }
+      .metric-copy small { font-size: 9px; }
+      .card-head { padding: 14px; }
+      .doc-item { padding-right: 13px; padding-left: 17px; }
+      .doc-bottom { align-items: flex-end; }
+      .text-link { font-size: 10px; }
+    }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; } }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="scrim" id="scrim"></div>
+    <aside class="sidebar" id="sidebar" aria-label="Navegación principal">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">FT</div>
+        <div class="brand-copy"><strong>Facultad de Tecnología</strong><span>UMSA · Gestión documental</span></div>
+      </div>
+      <nav class="nav" aria-label="Secciones del sistema">
+        <p class="nav-label">MI ESPACIO</p>
+        <a class="nav-link active" href="#inicio"><span class="nav-icon" aria-hidden="true">⌂</span>Inicio</a>
+        <a class="nav-link" href="#documentos"><span class="nav-icon" aria-hidden="true">▤</span>Documentos<span class="nav-count">8</span></a>
+        <a class="nav-link" href="#equipo"><span class="nav-icon" aria-hidden="true">☷</span>Revisiones del equipo<span class="nav-count">5</span></a>
+        <a class="nav-link" href="#avisos"><span class="nav-icon" aria-hidden="true">♧</span>Notificaciones<span class="nav-count">3</span></a>
+      </nav>
+      <div class="side-bottom"><strong>Facultad de Tecnología</strong>Universidad Mayor de San Andrés<br>Vista previa · datos de ejemplo</div>
+    </aside>
+
+    <main class="main" id="inicio">
+      <header class="topbar">
+        <div style="display:flex;align-items:center;gap:10px;min-width:0">
+          <button class="icon-button menu-button" id="menuButton" aria-label="Abrir menú" aria-expanded="false"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+          <div class="crumb"><strong>Inicio</strong><span>Jefatura · Carrera de Ingeniería Industrial</span></div>
+        </div>
+        <div class="top-actions">
+          <button class="icon-button" id="notificationButton" aria-label="Ver notificaciones" title="Notificaciones"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg><span class="notification-dot"></span></button>
+          <div class="profile"><div class="avatar" aria-hidden="true">MR</div><div class="profile-name"><strong>María Rodríguez</strong><span>Jefa de Carrera</span></div><span aria-hidden="true" style="color:#8190a0;font-size:11px">⌄</span></div>
+        </div>
+      </header>
+
+      <div class="content">
+        <section class="welcome" aria-labelledby="welcomeTitle">
+          <div>
+            <p class="eyebrow">Jueves, 12 de noviembre de 2026</p>
+            <h1 id="welcomeTitle">Buen día, María</h1>
+            <p class="subtitle">Aquí tiene lo que necesita atender hoy.</p>
+            <div class="scope-pill"><span class="scope-dot" aria-hidden="true"></span>Su espacio: <strong>Carrera de Ingeniería Industrial</strong></div>
+          </div>
+          <button class="primary-button" data-message="La creación de documento se conectará al sistema." type="button"><span aria-hidden="true">＋</span>Nuevo documento</button>
+        </section>
+
+        <section class="overview" aria-label="Resumen de trabajo">
+          <article class="metric"><div class="metric-icon amber" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 4h8l4 4v12H4V4h4Zm0 0v5h8V4M8 14h8M8 17h5"/></svg></div><div class="metric-copy"><span>Por asignar</span><strong>1</strong><small>Documento recibido</small></div></article>
+          <article class="metric"><div class="metric-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div><div class="metric-copy"><span>En revisión</span><strong>1</strong><small>Con su equipo</small></div></article>
+          <article class="metric"><div class="metric-icon green" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m5 12 4 4L19 6"/></svg></div><div class="metric-copy"><span>Para decidir</span><strong>1</strong><small>Revisión entregada</small></div></article>
+          <article class="metric"><div class="metric-icon purple" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2m6-10a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm10 10v-2a4 4 0 0 0-3-3.87m-1-11.86a4 4 0 0 1 0 7.75"/></svg></div><div class="metric-copy"><span>Tareas del equipo</span><strong>7</strong><small>5 pendientes · 2 entregadas</small></div></article>
+        </section>
+
+        <div class="work-grid">
+          <section class="card" id="documentos" aria-labelledby="pendingTitle">
+            <header class="card-head"><div class="head-title"><span class="head-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 4h8l4 4v12H4V4h4Zm0 0v5h8V4M8 14h8M8 17h5"/></svg></span><div><h2 id="pendingTitle">Documentos pendientes</h2><p>Elija el siguiente paso para cada documento.</p></div></div><a class="text-link" href="#documentos" data-message="Aquí se mostraría la bandeja completa.">Ver todos <span aria-hidden="true">→</span></a></header>
+            <div class="filter-row" role="group" aria-label="Filtrar documentos">
+              <button class="filter active" data-filter="all" aria-pressed="true">Todos <span>3</span></button>
+              <button class="filter" data-filter="assign" aria-pressed="false">Por asignar <span>1</span></button>
+              <button class="filter" data-filter="review" aria-pressed="false">En revisión <span>1</span></button>
+              <button class="filter" data-filter="decision" aria-pressed="false">Para decidir <span>1</span></button>
+            </div>
+            <ul class="doc-list">
+              <li class="doc-item" data-state="assign" data-title="Solicitud de revisión del plan de trabajo 2027" data-code="FT-IND-2026-0148" data-from="Carrera de Ingeniería Electrónica" data-detail="Este documento llegó a su unidad. Puede asignarlo a una o más personas de su equipo para revisión interna.">
+                <div class="doc-top"><span class="status assign">Por asignar</span><span class="doc-code">FT-IND-2026-0148</span></div>
+                <h3>Solicitud de revisión del plan de trabajo 2027</h3>
+                <div class="doc-meta"><span><b aria-hidden="true">↙</b> De: Ingeniería Electrónica</span><span><b aria-hidden="true">▤</b> 2 adjuntos</span></div>
+                <div class="doc-bottom"><span class="deadline soon"><span aria-hidden="true">◷</span> Vence mañana, 13 nov.</span><button class="row-action open-doc" type="button">Asignar revisión <span aria-hidden="true">→</span></button></div>
+              </li>
+              <li class="doc-item" data-state="review" data-title="Actualización de inventario de laboratorios" data-code="FT-ADM-2026-0139" data-from="Administración de la Facultad" data-detail="La revisión fue asignada a Ana Flores. Puede consultar el avance y los comentarios del equipo.">
+                <div class="doc-top"><span class="status review">En revisión</span><span class="doc-code">FT-ADM-2026-0139</span></div>
+                <h3>Actualización de inventario de laboratorios</h3>
+                <div class="doc-meta"><span><b aria-hidden="true">↙</b> De: Administración de la Facultad</span><span><b aria-hidden="true">▤</b> 1 adjunto</span></div>
+                <div class="doc-bottom"><span class="deadline"><span aria-hidden="true">◷</span> Asignado a Ana Flores</span><button class="row-action open-doc" type="button">Ver avance <span aria-hidden="true">→</span></button></div>
+              </li>
+              <li class="doc-item" data-state="decision" data-title="Informe de actividades del segundo trimestre" data-code="FT-MAT-2026-0112" data-from="Carrera de Matemática" data-detail="El equipo entregó sus revisiones. Revise las recomendaciones y registre la decisión oficial de su unidad.">
+                <div class="doc-top"><span class="status decision">Para decidir</span><span class="doc-code">FT-MAT-2026-0112</span></div>
+                <h3>Informe de actividades del segundo trimestre</h3>
+                <div class="doc-meta"><span><b aria-hidden="true">↙</b> De: Carrera de Matemática</span><span><b aria-hidden="true">▤</b> 3 adjuntos</span></div>
+                <div class="doc-bottom"><span class="deadline late"><span aria-hidden="true">◷</span> Vencido · requiere atención</span><button class="row-action open-doc" type="button">Revisar resultado <span aria-hidden="true">→</span></button></div>
+              </li>
+            </ul>
+            <div class="empty" id="emptyState">No hay documentos en esta categoría.</div>
+          </section>
+
+          <section class="card" id="equipo" aria-labelledby="teamTitle">
+            <header class="card-head"><div class="head-title"><span class="head-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2m6-10a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm10 10v-2a4 4 0 0 0-3-3.87m-1-11.86a4 4 0 0 1 0 7.75"/></svg></span><div><h2 id="teamTitle">Tareas del equipo</h2><p>Vea quién tiene trabajo pendiente.</p></div></div><a class="text-link" href="#equipo" data-message="Aquí se abriría el tablero de revisiones de su unidad.">Ver tablero <span aria-hidden="true">→</span></a></header>
+            <div class="team-body">
+              <div class="task-totals"><div class="task-total"><span>Pendientes</span><strong>5</strong><small>por entregar</small></div><div class="task-total done"><span>Entregadas</span><strong>2</strong><small>listas para revisar</small></div></div>
+              <h3 class="section-mini-title">Carga por persona</h3>
+              <div class="person"><div class="person-avatar" aria-hidden="true">AF</div><div class="person-info"><strong>Ana Flores</strong><span>Secretaría</span></div><span class="task-badge">2 pendientes</span></div>
+              <div class="person"><div class="person-avatar" aria-hidden="true">JR</div><div class="person-info"><strong>Jorge Rojas</strong><span>Auxiliar de Secretaría</span></div><span class="task-badge">2 pendientes</span></div>
+              <div class="person"><div class="person-avatar" aria-hidden="true">LC</div><div class="person-info"><strong>Lucía Choque</strong><span>Secretaría</span></div><span class="task-badge">1 pendiente</span></div>
+              <h3 class="section-mini-title">Actividad reciente</h3>
+              <div class="recent-list">
+                <div class="recent"><span class="recent-mark" aria-hidden="true">✓</span><div class="recent-copy"><strong>Ana entregó una revisión</strong><span>Inventario de laboratorios · hace 18 min</span></div></div>
+                <div class="recent"><span class="recent-mark pending" aria-hidden="true">•</span><div class="recent-copy"><strong>Asignaste una nueva tarea</strong><span>Informe trimestral · hoy, 09:42</span></div></div>
+              </div>
+              <div class="team-footer"><button type="button" class="secondary-button" data-message="Se abriría el tablero completo de tareas de su equipo.">Abrir tareas del equipo <span aria-hidden="true">→</span></button></div>
+            </div>
+          </section>
+        </div>
+
+        <aside class="hint"><span aria-hidden="true">ⓘ</span><span><strong>Una decisión por unidad.</strong> Las revisiones del equipo son recomendaciones internas. La respuesta oficial al remitente la registra Jefatura.</span></aside>
+      </div>
+      <footer class="footer">Facultad de Tecnología · Universidad Mayor de San Andrés <span style="float:right">Maqueta de interfaz · información ficticia</span></footer>
+    </main>
+  </div>
+
+  <dialog id="docDialog" aria-labelledby="dialogTitle">
+    <div class="dialog-head"><div><h2 id="dialogTitle">Detalle del documento</h2><p id="dialogCode"></p></div><button class="icon-button" id="closeDialog" aria-label="Cerrar">✕</button></div>
+    <div class="dialog-body"><p><strong>Remitente:</strong> <span id="dialogFrom"></span></p><p id="dialogDetail"></p><p style="margin-bottom:0">Este es un ejemplo de cómo la maqueta puede guiar a Jefatura hacia la siguiente acción disponible.</p></div>
+    <div class="dialog-actions"><button class="secondary-button" id="cancelDialog">Cerrar</button><button class="primary-button" id="dialogAction">Continuar <span aria-hidden="true">→</span></button></div>
+  </dialog>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    const toast = document.getElementById('toast');
+    let toastTimer;
+    function showToast(message) {
+      toast.textContent = message;
+      toast.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.remove('show'), 2600);
+    }
+
+    document.querySelectorAll('[data-message]').forEach((element) => {
+      element.addEventListener('click', (event) => {
+        event.preventDefault();
+        showToast(element.dataset.message);
+      });
+    });
+
+    const filters = document.querySelectorAll('[data-filter]');
+    const documents = document.querySelectorAll('.doc-item');
+    const emptyState = document.getElementById('emptyState');
+    filters.forEach((filter) => filter.addEventListener('click', () => {
+      filters.forEach((item) => {
+        const selected = item === filter;
+        item.classList.toggle('active', selected);
+        item.setAttribute('aria-pressed', String(selected));
+      });
+      let visible = 0;
+      documents.forEach((document) => {
+        const matches = filter.dataset.filter === 'all' || document.dataset.state === filter.dataset.filter;
+        document.hidden = !matches;
+        if (matches) visible += 1;
+      });
+      emptyState.style.display = visible ? 'none' : 'block';
+    }));
+
+    const dialog = document.getElementById('docDialog');
+    document.querySelectorAll('.open-doc').forEach((button) => button.addEventListener('click', () => {
+      const item = button.closest('.doc-item');
+      document.getElementById('dialogTitle').textContent = item.dataset.title;
+      document.getElementById('dialogCode').textContent = item.dataset.code;
+      document.getElementById('dialogFrom').textContent = item.dataset.from;
+      document.getElementById('dialogDetail').textContent = item.dataset.detail;
+      document.getElementById('dialogAction').innerHTML = `${button.textContent.trim().replace(' →','')} <span aria-hidden="true">→</span>`;
+      dialog.showModal();
+    }));
+    document.getElementById('closeDialog').addEventListener('click', () => dialog.close());
+    document.getElementById('cancelDialog').addEventListener('click', () => dialog.close());
+    document.getElementById('dialogAction').addEventListener('click', () => {
+      dialog.close();
+      showToast('Esta acción es solo una demostración de la maqueta.');
+    });
+
+    const sidebar = document.getElementById('sidebar');
+    const scrim = document.getElementById('scrim');
+    const menuButton = document.getElementById('menuButton');
+    function toggleMenu(open) {
+      sidebar.classList.toggle('open', open);
+      scrim.classList.toggle('show', open);
+      menuButton.setAttribute('aria-expanded', String(open));
+    }
+    menuButton.addEventListener('click', () => toggleMenu(!sidebar.classList.contains('open')));
+    scrim.addEventListener('click', () => toggleMenu(false));
+    sidebar.querySelectorAll('.nav-link').forEach((link) => link.addEventListener('click', () => {
+      sidebar.querySelectorAll('.nav-link').forEach((item) => item.classList.remove('active'));
+      link.classList.add('active');
+      if (window.innerWidth <= 820) toggleMenu(false);
+    }));
+  </script>
+</body>
+</html>

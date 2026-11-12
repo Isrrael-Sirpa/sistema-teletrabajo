@@ -5,6 +5,8 @@ namespace App\Http\Requests;
 use App\Enums\OrganizationalUnitType;
 use App\Enums\UserStatus;
 use App\Models\Document;
+use App\Models\OrganizationalUnit;
+use App\Models\User;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
@@ -27,7 +29,7 @@ class StoreDocumentRecipientRequest extends FormRequest
                 'nullable',
                 'required_if:recipient_type,unit',
                 'integer',
-                Rule::exists('organizational_units', 'id')->where(function ($query): void {
+                Rule::exists(OrganizationalUnit::class, 'id')->where(function ($query): void {
                     $query->where('is_active', true)->whereIn('type', [
                         OrganizationalUnitType::CAREER->value,
                         OrganizationalUnitType::KARDEX->value,
@@ -38,7 +40,7 @@ class StoreDocumentRecipientRequest extends FormRequest
                 'nullable',
                 'required_if:recipient_type,person',
                 'integer',
-                Rule::exists('users', 'id')->where('status', UserStatus::ACTIVE->value),
+                Rule::exists(User::class, 'id')->where('status', UserStatus::ACTIVE->value),
             ],
             'requires_response' => ['required', 'boolean'],
             'lock_version' => ['required', 'integer', 'min:0'],

@@ -6,6 +6,7 @@ use App\Enums\DocumentRecipientStatus;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 #[Fillable([
@@ -16,6 +17,8 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 class DocumentRecipient extends Model
 {
     use SoftDeletes;
+
+    protected $table = 'destinatarios_documentos';
 
     public function document(): BelongsTo
     {
@@ -45,6 +48,11 @@ class DocumentRecipient extends Model
     public function decisionMaker(): BelongsTo
     {
         return $this->belongsTo(User::class, 'decided_by');
+    }
+
+    public function reviewTasks(): HasMany
+    {
+        return $this->hasMany(DocumentReviewTask::class);
     }
 
     protected function casts(): array

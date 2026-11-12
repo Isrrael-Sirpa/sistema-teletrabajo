@@ -27,6 +27,8 @@ class Document extends Model
 {
     use HasUuids, SoftDeletes;
 
+    protected $table = 'documentos';
+
     /** @return array<int, string> */
     public function uniqueIds(): array
     {
@@ -84,8 +86,12 @@ class Document extends Model
     }
 
     /** @param Builder<Document> $query */
-    public function scopeVisibleTo(Builder $query, User $user, bool $includeGrants = true): Builder
-    {
+    public function scopeVisibleTo(
+        Builder $query,
+        User $user,
+        bool $includeGrants = true,
+        bool $includeTasks = true,
+    ): Builder {
         if ($user->hasInstitutionalGlobalScope()) {
             return $query;
         }
@@ -93,10 +99,12 @@ class Document extends Model
         $delegatedUnits = app(DelegatedAuthorizationService::class)
             ->unitIdsFor($user, PermissionName::DOCUMENTS_VIEW);
 
-        return $query->where(function (Builder $visibility) use ($delegatedUnits, $includeGrants, $user): void {
+        $isResponsible = $user->isResponsibleForUnit((int) $user->organizational_unit_id);
+
+        return $query->where(function (Builder $visibility) use ($delegatedUnits, $includeGrants, $includeTasks, $isResponsible, $user): void {
             $visibility->whereRaw('1 = 0');
 
-            if ($user->hasRole(RoleName::CAREER_HEAD->value)) {
+            if ($isResponsible) {
                 $visibility->orWhere('origin_unit_id', $user->organizational_unit_id);
             }
 
@@ -115,24 +123,30 @@ class Document extends Model
             }
 
             if (! $user->hasRole(RoleName::EXTRA->value)) {
-                $visibility->orWhereHas('recipients', function (Builder $recipients) use ($user): void {
+                $visibility->orWhereHas('recipients', function (Builder $recipients) use ($user, $isResponsible): void {
                     $recipients
                         ->where('status', '!=', DocumentRecipientStatus::PREPARED->value)
-                        ->where(function (Builder $target) use ($user): void {
+                        ->where(function (Builder $target) use ($user, $isResponsible): void {
                             $target->where('user_id', $user->getKey());
 
-                            if ($user->hasAnyRole([
-                                RoleName::CAREER_HEAD->value,
-                                RoleName::SECRETARY->value,
-                                RoleName::SECRETARY_ASSISTANT->value,
-                            ])) {
-                                $target->orWhere(function (Builder $unit) use ($user): void {
-                                    $unit->whereNull('user_id')
-                                        ->where('unit_id', $user->organizational_unit_id);
-                                });
+                            if ($isResponsible) {
+                                $target->orWhere(fn (Builder $unit) => $unit
+                                    ->where('unit_id', $user->organizational_unit_id)
+                                    ->where(fn (Builder $recipients) => $recipients
+                                        ->whereNull('user_id')
+                                        ->orWhere('requires_response', true)));
+                            } elseif ($user->roleName()?->canReviewInternally()) {
+                                $target->orWhere(fn (Builder $copy) => $copy
+                                    ->whereNull('user_id')
+                                    ->where('requires_response', false)
+                                    ->where('unit_id', $user->organizational_unit_id));
                             }
                         });
                 });
+            }
+
+            if ($includeTasks && DocumentReviewTask::canBeAssignedTo($user)) {
+                $visibility->orWhereHas('recipients.reviewTasks', fn (Builder $tasks) => $tasks->assignedTo($user));
             }
 
             if ($includeGrants) {
@@ -144,6 +158,15 @@ class Document extends Model
                 });
             }
         });
+    }
+
+    public function reviewVersionIdsFor(User $user): Builder
+    {
+        return DocumentReviewTask::query()
+            ->assignedTo($user)
+            ->whereRelation('recipient', 'document_id', $this->getKey())
+            ->whereNotNull('document_version_id')
+            ->select('document_version_id');
     }
 
     /** @param Builder<Document> $query */

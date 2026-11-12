@@ -5,16 +5,21 @@ namespace App\Services;
 use App\Enums\DocumentConfidentiality;
 use App\Enums\DocumentEventType;
 use App\Enums\DocumentPriority;
+use App\Enums\DocumentRecipientStatus;
 use App\Enums\DocumentStatus;
 use App\Enums\OrganizationalUnitType;
 use App\Enums\PermissionName;
 use App\Enums\RoleName;
 use App\Enums\UserStatus;
 use App\Models\Document;
+use App\Models\DocumentFile;
+use App\Models\DocumentReviewTask;
 use App\Models\OrganizationalUnit;
 use App\Models\User;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Gate;
 
 class DashboardService
 {
@@ -22,6 +27,7 @@ class DashboardService
         private readonly DocumentWorkQueryService $workQueries,
         private readonly DocumentDeadlineService $deadlines,
         private readonly DelegatedAuthorizationService $delegations,
+        private readonly DocumentReviewService $reviews,
     ) {}
 
     /** @return array<string, mixed> */
@@ -30,30 +36,42 @@ class DashboardService
         $user->loadMissing(['roles', 'organizationalUnit']);
         $role = $user->roleName();
         $unreadCount = $user->unreadNotifications()->count();
-        $temporaryHeadships = $this->delegations->activeFor($user);
-        $cards = match ($role) {
-            RoleName::ADMINISTRATOR, RoleName::CO_ADMINISTRATOR => $this->globalCards($unreadCount),
-            RoleName::CAREER_HEAD => $this->headCards($user, $unreadCount),
-            RoleName::SECRETARY => $this->secretaryCards($user, $unreadCount),
-            RoleName::SECRETARY_ASSISTANT => $this->assistantCards($user, $unreadCount),
-            RoleName::EXTRA => $this->extraCards($user, $unreadCount),
-            default => [$this->notificationCard($unreadCount)],
-        };
-
-        return [
+        $base = [
             'role' => $role,
             'roleLabel' => $role?->label() ?? 'Usuario',
             'scopeLabel' => $role?->isGlobal() === true
                 ? 'Ámbito institucional'
                 : ($user->organizationalUnit?->name ?? 'Sin unidad asignada'),
-            'cards' => $cards,
+            'unreadNotificationCount' => $unreadCount,
+            'temporaryHeadships' => $this->delegations->activeFor($user),
+        ];
+
+        if ($user->isResponsibleForUnit((int) $user->organizational_unit_id)) {
+            $corrections = $this->workQueries->visibleTo($user);
+            $this->workQueries->apply($corrections, $user, 'returned_correction');
+
+            return $base + [
+                'unitDashboard' => true,
+                'unitPending' => $this->unitPending($user),
+                'teamTasks' => $this->teamTasks($user->organizational_unit_id),
+                'hasReturnedCorrections' => $corrections->exists(),
+            ];
+        }
+
+        return $base + [
+            'unitDashboard' => false,
+            'cards' => match ($role) {
+                RoleName::ADMINISTRATOR, RoleName::CO_ADMINISTRATOR => $this->globalCards($unreadCount),
+                RoleName::SECRETARY => $this->secretaryCards($user, $unreadCount),
+                RoleName::SECRETARY_ASSISTANT => $this->assistantCards($user, $unreadCount),
+                RoleName::EXTRA => $this->extraCards($user, $unreadCount),
+                default => [$this->notificationCard($unreadCount)],
+            },
             'quickLinks' => $this->quickLinks($user, $role),
             'attentionTitle' => $role === RoleName::EXTRA
                 ? 'Documentos autorizados recientes'
                 : 'Necesitan su atención',
             'attention' => $this->attention($user, $role),
-            'unreadNotificationCount' => $unreadCount,
-            'temporaryHeadships' => $temporaryHeadships,
         ];
     }
 
@@ -92,16 +110,80 @@ class DashboardService
         ];
     }
 
-    /** @return array<int, array<string, mixed>> */
-    private function headCards(User $user, int $unreadCount): array
+    /** @return Collection<int, array<string, mixed>> */
+    private function unitPending(User $user): Collection
     {
+        $now = $this->deadlines->normalizeNow();
+        $query = $this->workQueries->visibleTo($user)->with([
+            'originUnit:id,name',
+            'recipients' => function ($recipients) use ($user): void {
+                $this->workQueries->pendingUnitRecipients($recipients->getQuery(), $user);
+                $recipients->orderByDesc('requires_response')
+                    ->orderByRaw('CASE WHEN status = ? THEN 0 ELSE 1 END', [DocumentRecipientStatus::SENT->value])
+                    ->orderBy('id');
+            },
+        ]);
+        $this->workQueries->apply($query, $user, 'unit_pending');
+        $this->orderByAttention($query, $now, pendingByDestination: true);
+        $hasTeam = $this->reviews->team($user->organizational_unit_id)->isNotEmpty();
+        $gate = Gate::forUser($user);
+
+        return $query->limit(5)->get()->toBase()->map(function (Document $document) use ($hasTeam, $now, $gate): ?array {
+            $recipient = $document->recipients->first();
+            if (! $recipient) {
+                return null;
+            }
+
+            $versionId = $this->reviews->deliveredVersionId($document, $recipient);
+            $tasks = $recipient->reviewTasks()->where('document_version_id', $versionId)->whereNull('closed_at')
+                ->selectRaw('COUNT(CASE WHEN submitted_at IS NULL THEN 1 END) AS pending, COUNT(submitted_at) AS delivered')
+                ->first();
+            $destinationAnchor = 'destino-'.$recipient->id;
+            [$step, $label, $anchor] = match (true) {
+                $gate->allows('receiveRecipient', [$document, $recipient]) => [
+                    'Por recibir', $recipient->requires_response ? 'Recibir documento' : 'Recibir copia', $destinationAnchor,
+                ],
+                (int) $tasks->pending > 0 => ['En revisión del equipo', 'Ver revisiones', 'revisiones'],
+                (int) $tasks->delivered > 0 => ['Por decidir', 'Ver revisiones', 'revisiones'],
+                $recipient->status === DocumentRecipientStatus::IN_REVIEW => ['Por decidir', 'Revisar decisión', $destinationAnchor],
+                $hasTeam && $gate->allows('assignReview', [$document, $recipient]) => [
+                    'Por asignar', 'Asignar revisión', 'asignar-revision-'.$recipient->id,
+                ],
+                default => ['Por revisar', 'Revisar documento', $destinationAnchor],
+            };
+
+            return [
+                'document' => $document,
+                'step' => $step,
+                'actionLabel' => $label,
+                'url' => route('documents.show', $document).'#'.$anchor,
+                'deadlineStatus' => $this->deadlines->statusForPendingWork($document, $now),
+                'attachmentCount' => $versionId && $gate->allows('downloadFile', $document)
+                    ? DocumentFile::query()->where('document_version_id', $versionId)->count()
+                    : null,
+            ];
+        })->filter()->values();
+    }
+
+    /** @return array{pending: int, delivered: int, people: Collection, recent: Collection} */
+    private function teamTasks(int $unitId): array
+    {
+        $tasks = DocumentReviewTask::query()->forUnit($unitId)->whereNull('closed_at');
+        $counts = 'COUNT(CASE WHEN submitted_at IS NULL THEN 1 END) AS pending, COUNT(submitted_at) AS delivered';
+        $totals = (clone $tasks)->selectRaw($counts)->first();
+        $people = (clone $tasks)->select('assigned_to')->selectRaw($counts)
+            ->with('assignee:id,name')->groupBy('assigned_to')
+            ->orderByDesc('pending')->orderByDesc('delivered')->orderBy('assigned_to')->limit(4)->get();
+
+        $recent = $tasks->with(['assignee:id,name', 'recipient.document:id,public_id,subject']);
+        $pending = (clone $recent)->pending()->latest('id')->limit(2)->get();
+        $delivered = $recent->whereNotNull('submitted_at')->latest('submitted_at')->orderByDesc('id')->limit(2)->get();
+
         return [
-            $this->workCard($user, 'Pendientes de recibir', 'pending_receive', 'Enviados a su carrera y aún no recibidos.'),
-            $this->workCard($user, 'En revisión', 'in_review', 'Trámites activos de su carrera.'),
-            $this->workCard($user, 'Requieren decisión', 'decision', 'Puede aprobar, devolver o rechazar.'),
-            $this->workCard($user, 'Devueltos al origen', 'returned_correction', 'Pendientes de corrección o reenvío.'),
-            ...$this->deadlineCards($user),
-            $this->notificationCard($unreadCount),
+            'pending' => (int) $totals->pending,
+            'delivered' => (int) $totals->delivered,
+            'people' => $people,
+            'recent' => $pending->concat($delivered)->sortByDesc(fn (DocumentReviewTask $task) => $task->submitted_at ?? $task->created_at),
         ];
     }
 
@@ -109,9 +191,8 @@ class DashboardService
     private function secretaryCards(User $user, int $unreadCount): array
     {
         return [
-            $this->workCard($user, 'Pendientes de recibir', 'pending_receive', 'Enviados a su carrera y aún no recibidos.'),
-            $this->workCard($user, 'En revisión', 'in_review', 'Trámites activos en los que participa.'),
-            $this->workCard($user, 'Requieren decisión', 'decision', 'Puede aprobar, devolver o rechazar.'),
+            $this->taskCard($user),
+            $this->workCard($user, 'Copias y envíos por recibir', 'pending_receive', 'Copias de su unidad y envíos personales pendientes de recepción.'),
             $this->workCard($user, 'Mis borradores', 'my_drafts', 'Documentos propios aún no enviados.'),
             $this->workCard($user, 'Devueltos para corregir', 'returned_correction', 'Documentos propios pendientes de reenvío.'),
             ...$this->deadlineCards($user),
@@ -123,9 +204,7 @@ class DashboardService
     private function assistantCards(User $user, int $unreadCount): array
     {
         return [
-            $this->workCard($user, 'Documentos para colaborar', 'collaboration', 'Trabajo visible compatible con apoyo de revisión.'),
-            $this->workCard($user, 'En revisión', 'in_review', 'Documentos de su ámbito en revisión.'),
-            $this->workCard($user, 'Asignados a mí', 'assigned', 'Revisiones donde figura como responsable actual.'),
+            $this->taskCard($user),
             ...$this->deadlineCards($user),
             $this->notificationCard($unreadCount),
         ];
@@ -176,11 +255,18 @@ class DashboardService
         return $this->card('Notificaciones sin leer', $count, route('notifications.index'), 'Avisos pendientes de lectura.');
     }
 
+    private function taskCard(User $user): array
+    {
+        $count = DocumentReviewTask::query()->assignedTo($user)
+            ->whereHas('recipient.document')->pending()->count();
+
+        return $this->card('Mis tareas', $count, route('reviews.mine'), 'Revisiones internas pendientes de entregar.');
+    }
+
     /** @return Collection<int, array<string, mixed>> */
     private function attention(User $user, ?RoleName $role): Collection
     {
         $now = $this->deadlines->normalizeNow();
-        $cutoff = $this->deadlines->dueSoonCutoff($now);
         $query = $this->workQueries->visibleTo($user)
             ->with(['documentType:id,name', 'originUnit:id,name'])
             ->withMax([
@@ -197,26 +283,7 @@ class DashboardService
         if ($role === RoleName::EXTRA) {
             $query->latest('documents.updated_at');
         } else {
-            $query
-                ->orderByRaw(
-                    'CASE
-                        WHEN due_at IS NOT NULL AND due_at <= ? AND general_status IN (?, ?, ?, ?) THEN 0
-                        WHEN priority = ? THEN 1
-                        WHEN due_at > ? AND due_at <= ? AND general_status IN (?, ?, ?, ?) THEN 2
-                        WHEN priority = ? THEN 3
-                        ELSE 4
-                    END',
-                    [
-                        $now,
-                        ...DocumentStatus::deadlineActionableValues(),
-                        DocumentPriority::URGENT->value,
-                        $now,
-                        $cutoff,
-                        ...DocumentStatus::deadlineActionableValues(),
-                        DocumentPriority::IMPORTANT->value,
-                    ],
-                )
-                ->orderBy('documents.created_at');
+            $this->orderByAttention($query, $now);
         }
 
         return $query->limit(5)->get()->map(function (Document $document) use ($user, $now): array {
@@ -234,6 +301,33 @@ class DashboardService
                     && $lastVersion > $lastSent,
             ];
         });
+    }
+
+    /** @param Builder<Document> $query */
+    private function orderByAttention(Builder $query, CarbonInterface $now, bool $pendingByDestination = false): void
+    {
+        // A destination can still have work after another destination has made a decision.
+        $deadlineFilter = $pendingByDestination ? '' : ' AND general_status IN (?, ?, ?, ?)';
+        $deadlineStatuses = $pendingByDestination ? [] : DocumentStatus::deadlineActionableValues();
+
+        $query->orderByRaw(
+            "CASE
+                WHEN due_at <= ?{$deadlineFilter} THEN 0
+                WHEN priority = ? THEN 1
+                WHEN due_at > ? AND due_at <= ?{$deadlineFilter} THEN 2
+                WHEN priority = ? THEN 3
+                ELSE 4
+            END",
+            [
+                $now,
+                ...$deadlineStatuses,
+                DocumentPriority::URGENT->value,
+                $now,
+                $this->deadlines->dueSoonCutoff($now),
+                ...$deadlineStatuses,
+                DocumentPriority::IMPORTANT->value,
+            ],
+        )->orderBy('documents.created_at')->orderBy('documents.id');
     }
 
     /** @return array<int, array{label: string, url: string}> */

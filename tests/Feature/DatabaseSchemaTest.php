@@ -18,20 +18,20 @@ class DatabaseSchemaTest extends TestCase
     public function test_the_approved_phase_two_tables_exist(): void
     {
         $tables = [
-            'organizational_units',
-            'users',
-            'document_types',
-            'document_counters',
-            'documents',
-            'document_recipients',
-            'document_versions',
-            'document_files',
-            'document_observations',
-            'document_access_grants',
-            'document_events',
-            'audit_logs',
-            'temporary_delegations',
-            'notifications',
+            'unidades_organizacionales',
+            'usuarios',
+            'tipos_documentos',
+            'contadores_documentos',
+            'documentos',
+            'destinatarios_documentos',
+            'versiones_documentos',
+            'archivos_documentos',
+            'observaciones_documentos',
+            'concesiones_acceso_documentos',
+            'eventos_documentos',
+            'registros_auditoria',
+            'delegaciones_temporales',
+            'notificaciones',
         ];
 
         foreach ($tables as $table) {
@@ -41,7 +41,7 @@ class DatabaseSchemaTest extends TestCase
 
     public function test_document_recipients_and_files_have_the_required_columns(): void
     {
-        $this->assertTrue(Schema::hasColumns('document_recipients', [
+        $this->assertTrue(Schema::hasColumns('destinatarios_documentos', [
             'document_id',
             'unit_id',
             'user_id',
@@ -53,9 +53,9 @@ class DatabaseSchemaTest extends TestCase
             'deleted_at',
         ]));
 
-        $this->assertTrue(Schema::hasColumn('documents', 'deleted_at'));
+        $this->assertTrue(Schema::hasColumn('documentos', 'deleted_at'));
 
-        $this->assertTrue(Schema::hasColumns('document_files', [
+        $this->assertTrue(Schema::hasColumns('archivos_documentos', [
             'document_version_id',
             'disk',
             'path',
@@ -65,7 +65,7 @@ class DatabaseSchemaTest extends TestCase
             'sha256',
         ]));
 
-        $this->assertTrue(Schema::hasColumns('document_events', [
+        $this->assertTrue(Schema::hasColumns('eventos_documentos', [
             'document_id',
             'document_recipient_id',
             'actor_id',
@@ -108,6 +108,6 @@ class DatabaseSchemaTest extends TestCase
 
         $this->expectException(QueryException::class);
 
-        DB::table('organizational_units')->where('id', $unit->id)->delete();
+        DB::table('unidades_organizacionales')->where('id', $unit->id)->delete();
     }
 }

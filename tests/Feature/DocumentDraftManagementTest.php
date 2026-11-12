@@ -96,7 +96,7 @@ class DocumentDraftManagementTest extends TestCase
             'document_type_id', 'subject', 'priority', 'confidentiality', 'due_at',
         ]);
 
-        $this->assertDatabaseCount('documents', 0);
+        $this->assertDatabaseCount('documentos', 0);
     }
 
     public function test_global_user_must_select_an_active_origin_unit(): void
@@ -147,7 +147,7 @@ class DocumentDraftManagementTest extends TestCase
         $this->actingAs($secretary)->post(route('documents.store'), $this->validData())
             ->assertSessionHasErrors('origin_unit_id');
 
-        $this->assertDatabaseCount('documents', 0);
+        $this->assertDatabaseCount('documentos', 0);
     }
 
     public function test_document_visibility_respects_global_career_and_ownership_scopes(): void
@@ -256,7 +256,7 @@ class DocumentDraftManagementTest extends TestCase
 
         $this->actingAs($secretary)->get(route('documents.edit', $document))->assertForbidden();
         $this->actingAs($secretary)->delete(route('documents.discard', $document))->assertForbidden();
-        $this->assertDatabaseHas('documents', ['id' => $document->id]);
+        $this->assertDatabaseHas('documentos', ['id' => $document->id]);
     }
 
     public function test_creator_can_logically_discard_only_their_clean_never_sent_draft(): void
@@ -273,8 +273,8 @@ class DocumentDraftManagementTest extends TestCase
         $this->actingAs($owner)->delete(route('documents.discard', $document))
             ->assertRedirect(route('documents.index'));
 
-        $this->assertSoftDeleted('documents', ['id' => $document->id]);
-        $this->assertDatabaseHas('document_events', [
+        $this->assertSoftDeleted('documentos', ['id' => $document->id]);
+        $this->assertDatabaseHas('eventos_documentos', [
             'document_id' => $document->id,
             'event_type' => 'draft_discarded',
             'actor_id' => $owner->id,
@@ -297,7 +297,7 @@ class DocumentDraftManagementTest extends TestCase
 
         $this->actingAs($administrator)->get(route('documents.index'))
             ->assertOk()
-            ->assertViewHas('documents', fn (LengthAwarePaginator $documents): bool => $documents->perPage() === 15 && $documents->count() === 15);
+            ->assertViewHas('documentos', fn (LengthAwarePaginator $documents): bool => $documents->perPage() === 15 && $documents->count() === 15);
 
         $this->assertTrue(Route::has('documents.send'));
     }

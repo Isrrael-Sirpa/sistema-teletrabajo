@@ -11,6 +11,7 @@ use App\Http\Requests\StoreDocumentRequest;
 use App\Http\Requests\UpdateDocumentRequest;
 use App\Models\Document;
 use App\Models\DocumentRecipient;
+use App\Models\DocumentReviewTask;
 use App\Models\DocumentType;
 use App\Models\OrganizationalUnit;
 use App\Models\User;
@@ -19,6 +20,7 @@ use App\Services\DocumentDeadlineService;
 use App\Services\DocumentDraftService;
 use App\Services\DocumentFileService;
 use App\Services\DocumentRecipientEligibility;
+use App\Services\DocumentReviewService;
 use App\Services\DocumentSearchService;
 use App\Services\DocumentWorkQueryService;
 use Illuminate\Http\RedirectResponse;
@@ -62,7 +64,7 @@ class DocumentController extends Controller
                 $query->whereIn('id', $visibleDocuments()->select('origin_unit_id'))
                     ->orWhereIn('id', DocumentRecipient::query()
                         ->select('unit_id')
-                        ->whereIn('document_id', $visibleDocuments()->select('documents.id')));
+                        ->whereIn('document_id', $visibleDocuments()->select((new Document)->qualifyColumn('id'))));
             })
             ->orderBy('name')->get();
         $people = User::query()->with('organizationalUnit')
@@ -72,7 +74,7 @@ class DocumentController extends Controller
                     ->orWhereIn('id', DocumentRecipient::query()
                         ->whereNotNull('user_id')
                         ->select('user_id')
-                        ->whereIn('document_id', $visibleDocuments()->select('documents.id')));
+                        ->whereIn('document_id', $visibleDocuments()->select((new Document)->qualifyColumn('id'))));
             })
             ->orderBy('name')->get();
         $documentTypes = DocumentType::query()
@@ -91,19 +93,30 @@ class DocumentController extends Controller
         ));
     }
 
-    public function show(Request $request, Document $document): View
+    public function show(Request $request, Document $document, DocumentReviewService $reviews): View
     {
         Gate::authorize('view', $document);
+        $actor = $request->user();
+        $taskOnly = DocumentReviewTask::canBeAssignedTo($actor)
+            && ! Document::query()->whereKey($document->getKey())->visibleTo($actor, includeTasks: false)->exists();
         $document->load([
             'documentType',
             'originUnit',
             'creator',
             'annuller',
+            'recipients' => fn ($recipients) => $recipients->when(
+                $taskOnly,
+                fn ($destinations) => $destinations->where('unit_id', $actor->organizational_unit_id),
+            ),
             'recipients.unit',
             'recipients.user.roles',
             'recipients.receiver',
             'recipients.currentHandler',
             'recipients.decisionMaker',
+            'versions' => fn ($versions) => $versions->when(
+                $taskOnly,
+                fn ($query) => $query->whereIn('id', $document->reviewVersionIdsFor($actor)),
+            ),
             'versions.uploader',
             'versions.files.uploader',
         ]);
@@ -112,7 +125,7 @@ class DocumentController extends Controller
         $canManageFiles = Gate::allows('manageFiles', $document);
         $canManageAccessGrants = Gate::allows('manageAccessGrants', $document);
         $deadlineStatus = $this->deadlines->status($document);
-        $pendingCorrectionVersion = $this->files->pendingCorrectionVersion($document);
+        $pendingCorrectionVersion = $taskOnly ? null : $this->files->pendingCorrectionVersion($document);
         $currentVersionNumber = (int) ($document->versions->max('version_number') ?? 0);
         $returnedRecipients = $document->recipients
             ->where('requires_response', true)
@@ -122,6 +135,21 @@ class DocumentController extends Controller
         $activeAccessGrants = collect();
         $eligibleAccessUsers = collect();
         $accessPermissions = DocumentAccessPermission::cases();
+        $isUnitResponsible = $actor->isResponsibleForUnit((int) $actor->organizational_unit_id);
+        $assignableDestinations = $document->recipients->filter(
+            fn (DocumentRecipient $recipient): bool => Gate::allows('assignReview', [$document, $recipient]),
+        );
+        $reviewTeam = $assignableDestinations->isEmpty() ? collect() : $reviews->team($actor->organizational_unit_id);
+        $reviewTasks = DocumentReviewTask::query()
+            ->whereRelation('recipient', 'document_id', $document->getKey())
+            ->when(
+                $isUnitResponsible,
+                fn ($tasks) => $tasks->whereRelation('recipient', 'unit_id', $actor->organizational_unit_id),
+                fn ($tasks) => $tasks->assignedTo($actor),
+            )
+            ->with(['recipient.unit', 'assignee', 'assigner', 'version'])
+            ->latest('id')
+            ->get();
 
         if ($canManageRecipients) {
             $recipientUnits = OrganizationalUnit::query()
@@ -150,6 +178,7 @@ class DocumentController extends Controller
         }
 
         $history = $document->events()
+            ->when($taskOnly, fn ($events) => $events->whereIn('document_recipient_id', $reviewTasks->pluck('document_recipient_id')))
             ->with(['actor', 'recipient.unit', 'recipient.user'])
             ->orderByDesc('occurred_at')
             ->orderByDesc('id')
@@ -174,6 +203,11 @@ class DocumentController extends Controller
             'activeAccessGrants',
             'eligibleAccessUsers',
             'accessPermissions',
+            'assignableDestinations',
+            'reviewTeam',
+            'reviewTasks',
+            'isUnitResponsible',
+            'taskOnly',
             'history',
         ));
     }

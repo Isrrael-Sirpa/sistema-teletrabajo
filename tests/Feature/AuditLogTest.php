@@ -75,14 +75,14 @@ class AuditLogTest extends TestCase
         $this->post(route('login.store'), ['email' => $inactive->email, 'password' => 'Clave-Segura-123!'])
             ->assertSessionHasErrors('email');
 
-        $this->assertDatabaseHas('audit_logs', [
+        $this->assertDatabaseHas('registros_auditoria', [
             'actor_id' => $active->id,
             'action' => AuditAction::AUTH_LOGIN_SUCCEEDED->value,
             'ip_address' => '192.0.2.44',
         ]);
-        $this->assertDatabaseHas('audit_logs', ['actor_id' => $active->id, 'action' => AuditAction::AUTH_LOGOUT->value]);
-        $this->assertDatabaseHas('audit_logs', ['actor_id' => null, 'action' => AuditAction::AUTH_LOGIN_FAILED->value]);
-        $this->assertDatabaseHas('audit_logs', [
+        $this->assertDatabaseHas('registros_auditoria', ['actor_id' => $active->id, 'action' => AuditAction::AUTH_LOGOUT->value]);
+        $this->assertDatabaseHas('registros_auditoria', ['actor_id' => null, 'action' => AuditAction::AUTH_LOGIN_FAILED->value]);
+        $this->assertDatabaseHas('registros_auditoria', [
             'actor_id' => null,
             'action' => AuditAction::AUTH_LOGIN_DENIED_INACTIVE->value,
             'auditable_id' => $inactive->id,
@@ -126,7 +126,7 @@ class AuditLogTest extends TestCase
             AuditAction::USER_ACTIVATED,
             AuditAction::USER_PASSWORD_RESET,
         ] as $action) {
-            $this->assertDatabaseHas('audit_logs', [
+            $this->assertDatabaseHas('registros_auditoria', [
                 'actor_id' => $this->admin->id,
                 'action' => $action->value,
                 'auditable_id' => $target->id,
@@ -177,7 +177,7 @@ class AuditLogTest extends TestCase
             AuditAction::DOCUMENT_TYPE_DEACTIVATED,
             AuditAction::DOCUMENT_TYPE_ACTIVATED,
         ] as $action) {
-            $this->assertDatabaseHas('audit_logs', ['action' => $action->value, 'actor_id' => $this->admin->id]);
+            $this->assertDatabaseHas('registros_auditoria', ['action' => $action->value, 'actor_id' => $this->admin->id]);
         }
     }
 
@@ -196,7 +196,7 @@ class AuditLogTest extends TestCase
 
         app(DocumentWorkflowService::class)->send($secretary, $document, 0);
 
-        $this->assertDatabaseHas('audit_logs', [
+        $this->assertDatabaseHas('registros_auditoria', [
             'actor_id' => $secretary->id,
             'action' => AuditAction::DOCUMENT_SENT->value,
             'auditable_id' => $document->id,
@@ -206,10 +206,10 @@ class AuditLogTest extends TestCase
 
     public function test_private_download_is_audited_without_storage_paths_or_restricted_content(): void
     {
-        Storage::fake('documents');
+        Storage::fake('documentos');
         $document = $this->document($this->admin, DocumentConfidentiality::RESTRICTED, 'ASUNTO-MUY-SECRETO');
         $file = $this->file($document, $this->admin, 'ruta/interna/secreta.pdf', 'nombre-secreto.pdf');
-        Storage::disk('documents')->put($file->path, 'contenido');
+        Storage::disk('documentos')->put($file->path, 'contenido');
 
         $this->actingAs($this->admin)
             ->withServerVariables(['REMOTE_ADDR' => '198.51.100.18'])
@@ -244,7 +244,7 @@ class AuditLogTest extends TestCase
             AuditAction::ACCESS_GRANT_LEVEL_CHANGED,
             AuditAction::ACCESS_GRANT_REVOKED,
         ] as $action) {
-            $this->assertDatabaseHas('audit_logs', ['actor_id' => $this->admin->id, 'action' => $action->value]);
+            $this->assertDatabaseHas('registros_auditoria', ['actor_id' => $this->admin->id, 'action' => $action->value]);
         }
 
         $change = AuditLog::query()->where('action', AuditAction::ACCESS_GRANT_LEVEL_CHANGED->value)->sole();
@@ -264,7 +264,7 @@ class AuditLogTest extends TestCase
             // Expected.
         }
 
-        $this->assertDatabaseMissing('audit_logs', ['action' => AuditAction::USER_UPDATED->value]);
+        $this->assertDatabaseMissing('registros_auditoria', ['action' => AuditAction::USER_UPDATED->value]);
     }
 
     public function test_only_administrator_and_co_administrator_can_view_audit_module(): void
@@ -387,7 +387,7 @@ class AuditLogTest extends TestCase
 
         return DocumentFile::query()->create([
             'document_version_id' => $version->id,
-            'disk' => 'documents',
+            'disk' => 'documentos',
             'path' => $path,
             'original_name' => $name,
             'stored_name' => 'interno.pdf',

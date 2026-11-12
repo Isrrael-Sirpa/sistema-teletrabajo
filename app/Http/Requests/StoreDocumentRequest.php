@@ -5,6 +5,8 @@ namespace App\Http\Requests;
 use App\Enums\DocumentConfidentiality;
 use App\Enums\DocumentPriority;
 use App\Models\Document;
+use App\Models\DocumentType;
+use App\Models\OrganizationalUnit;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
@@ -24,13 +26,13 @@ class StoreDocumentRequest extends FormRequest
             'document_type_id' => [
                 'required',
                 'integer',
-                Rule::exists('document_types', 'id')->where('is_active', true),
+                Rule::exists(DocumentType::class, 'id')->where('is_active', true),
             ],
             'origin_unit_id' => [
                 Rule::requiredIf($this->user()?->hasInstitutionalGlobalScope() === true),
                 'nullable',
                 'integer',
-                Rule::exists('organizational_units', 'id')->where('is_active', true),
+                Rule::exists(OrganizationalUnit::class, 'id')->where('is_active', true),
             ],
             'subject' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:5000'],

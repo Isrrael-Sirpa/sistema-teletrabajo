@@ -19,6 +19,8 @@ class TemporaryDelegation extends Model
 {
     use HasUuids;
 
+    protected $table = 'delegaciones_temporales';
+
     /** @return array<int, string> */
     public function uniqueIds(): array
     {
@@ -57,7 +59,7 @@ class TemporaryDelegation extends Model
 
     public function permissions(): BelongsToMany
     {
-        return $this->belongsToMany(Permission::class, 'temporary_delegation_permissions')
+        return $this->belongsToMany(Permission::class, 'permisos_delegaciones_temporales')
             ->withPivot('created_at');
     }
 

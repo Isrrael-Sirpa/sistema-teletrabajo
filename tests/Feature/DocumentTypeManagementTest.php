@@ -48,7 +48,7 @@ class DocumentTypeManagementTest extends TestCase
         $this->assertSame(12, DocumentType::query()->count());
 
         foreach (self::INITIAL_NAMES as $name) {
-            $this->assertDatabaseHas('document_types', [
+            $this->assertDatabaseHas('tipos_documentos', [
                 'name' => $name,
                 'is_active' => true,
             ]);
@@ -148,11 +148,11 @@ class DocumentTypeManagementTest extends TestCase
 
         $this->actingAs($administrator)->patch(route('document-types.deactivate', $type))->assertRedirect();
 
-        $this->assertDatabaseHas('document_types', ['id' => $type->id, 'is_active' => false]);
+        $this->assertDatabaseHas('tipos_documentos', ['id' => $type->id, 'is_active' => false]);
         $this->assertNotNull(DocumentType::query()->find($type->id));
 
         $this->actingAs($administrator)->patch(route('document-types.activate', $type))->assertRedirect();
-        $this->assertDatabaseHas('document_types', ['id' => $type->id, 'is_active' => true]);
+        $this->assertDatabaseHas('tipos_documentos', ['id' => $type->id, 'is_active' => true]);
         $this->assertFalse(Route::has('document-types.destroy'));
     }
 

@@ -57,8 +57,8 @@ class DocumentRecipientManagementTest extends TestCase
         $this->assertNull($document->code);
         $this->assertNull($document->sent_at);
         $this->assertSame(1, $document->lock_version);
-        $this->assertDatabaseCount('notifications', 0);
-        $this->assertDatabaseHas('document_events', [
+        $this->assertDatabaseCount('notificaciones', 0);
+        $this->assertDatabaseHas('eventos_documentos', [
             'document_id' => $document->id,
             'event_type' => 'recipient_added',
             'actor_id' => $creator->id,
@@ -77,7 +77,7 @@ class DocumentRecipientManagementTest extends TestCase
             'recipient_type' => 'person',
             'user_id' => $target->id,
             'unit_id' => $origin->id,
-            'requires_response' => true,
+            'requires_response' => false,
             'lock_version' => 0,
         ])->assertRedirect();
 
@@ -86,7 +86,7 @@ class DocumentRecipientManagementTest extends TestCase
         $this->assertSame($targetUnit->id, $recipient->unit_id);
     }
 
-    public function test_secretary_can_be_a_personal_recipient_that_requires_response(): void
+    public function test_new_personal_destinations_can_only_be_informational(): void
     {
         $origin = $this->career('Ingeniería Comercial', 'COM');
         $destination = $this->career('Ingeniería de Producción', 'PRO');
@@ -97,13 +97,19 @@ class DocumentRecipientManagementTest extends TestCase
         $this->actingAs($creator)->post(
             route('documents.recipients.store', $document),
             $this->personPayload($secretary, true, 0),
-        )->assertRedirect();
+        )->assertSessionHasErrors('requires_response');
+        $this->assertDatabaseCount('destinatarios_documentos', 0);
 
-        $this->assertDatabaseHas('document_recipients', [
+        $this->actingAs($creator)->post(
+            route('documents.recipients.store', $document),
+            $this->personPayload($secretary, false, 0),
+        )->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('destinatarios_documentos', [
             'document_id' => $document->id,
             'unit_id' => $destination->id,
             'user_id' => $secretary->id,
-            'requires_response' => true,
+            'requires_response' => false,
         ]);
     }
 
@@ -120,7 +126,7 @@ class DocumentRecipientManagementTest extends TestCase
             $this->personPayload($assistant, true, 0),
         )->assertSessionHasErrors('requires_response');
 
-        $this->assertDatabaseCount('document_recipients', 0);
+        $this->assertDatabaseCount('destinatarios_documentos', 0);
         $this->assertSame(0, $document->fresh()->lock_version);
 
         $this->actingAs($creator)->post(
@@ -160,7 +166,7 @@ class DocumentRecipientManagementTest extends TestCase
             $this->personPayload($extra, false, 0),
         )->assertSessionHasErrors('user_id');
 
-        $this->assertDatabaseCount('document_recipients', 0);
+        $this->assertDatabaseCount('destinatarios_documentos', 0);
         $this->assertSame(0, $document->fresh()->lock_version);
     }
 
@@ -183,8 +189,8 @@ class DocumentRecipientManagementTest extends TestCase
             'lock_version' => 3,
         ])->assertRedirect();
 
-        $this->assertDatabaseCount('document_recipients', 4);
-        $this->assertDatabaseHas('document_recipients', [
+        $this->assertDatabaseCount('destinatarios_documentos', 4);
+        $this->assertDatabaseHas('destinatarios_documentos', [
             'document_id' => $document->id,
             'unit_id' => $kardex->id,
             'user_id' => null,
@@ -207,7 +213,7 @@ class DocumentRecipientManagementTest extends TestCase
         $this->actingAs($creator)->post(route('documents.recipients.store', $document), $this->unitPayload($faculty, true, 0))
             ->assertSessionHasErrors('unit_id');
 
-        $this->assertDatabaseCount('document_recipients', 0);
+        $this->assertDatabaseCount('destinatarios_documentos', 0);
         $this->assertSame(0, $document->fresh()->lock_version);
     }
 
@@ -228,7 +234,7 @@ class DocumentRecipientManagementTest extends TestCase
             ])->assertSessionHasErrors('user_id');
         }
 
-        $this->assertDatabaseCount('document_recipients', 0);
+        $this->assertDatabaseCount('destinatarios_documentos', 0);
     }
 
     public function test_extra_and_unrelated_user_cannot_manage_recipients(): void
@@ -242,7 +248,7 @@ class DocumentRecipientManagementTest extends TestCase
 
         $this->actingAs($unrelated)->post(route('documents.recipients.store', $document), $payload)->assertForbidden();
         $this->actingAs($extra)->post(route('documents.recipients.store', $document), $payload)->assertForbidden();
-        $this->assertDatabaseCount('document_recipients', 0);
+        $this->assertDatabaseCount('destinatarios_documentos', 0);
     }
 
     public function test_global_administrators_can_manage_recipients_of_supervised_draft(): void
@@ -265,7 +271,7 @@ class DocumentRecipientManagementTest extends TestCase
             $this->unitPayload($targetB, false, 1),
         )->assertRedirect();
 
-        $this->assertDatabaseCount('document_recipients', 2);
+        $this->assertDatabaseCount('destinatarios_documentos', 2);
         $this->assertSame(2, $document->fresh()->lock_version);
     }
 
@@ -280,10 +286,10 @@ class DocumentRecipientManagementTest extends TestCase
         $this->actingAs($creator)->post(route('documents.recipients.store', $document), $this->unitPayload($targetUnit, true, 0))->assertRedirect();
         $this->actingAs($creator)->post(route('documents.recipients.store', $document), $this->unitPayload($targetUnit, false, 1))->assertSessionHasErrors('recipient');
 
-        $this->actingAs($creator)->post(route('documents.recipients.store', $document), $this->personPayload($person, true, 1))->assertRedirect();
+        $this->actingAs($creator)->post(route('documents.recipients.store', $document), $this->personPayload($person, false, 1))->assertSessionHasNoErrors();
         $this->actingAs($creator)->post(route('documents.recipients.store', $document), $this->personPayload($person, false, 2))->assertSessionHasErrors('recipient');
 
-        $this->assertDatabaseCount('document_recipients', 2);
+        $this->assertDatabaseCount('destinatarios_documentos', 2);
         $this->assertSame(2, $document->fresh()->lock_version);
     }
 
@@ -320,9 +326,9 @@ class DocumentRecipientManagementTest extends TestCase
             'lock_version' => 1,
         ])->assertRedirect()->assertSessionHas('status');
 
-        $this->assertSoftDeleted('document_recipients', ['id' => $recipient->id]);
+        $this->assertSoftDeleted('destinatarios_documentos', ['id' => $recipient->id]);
         $this->assertCount(0, $document->fresh()->recipients);
-        $this->assertDatabaseHas('document_events', [
+        $this->assertDatabaseHas('eventos_documentos', [
             'document_id' => $document->id,
             'document_recipient_id' => $recipient->id,
             'event_type' => 'recipient_removed',
@@ -363,7 +369,7 @@ class DocumentRecipientManagementTest extends TestCase
 
         $this->actingAs($creator)->post(route('documents.recipients.store', $document), $this->unitPayload($career, true, 0))
             ->assertForbidden();
-        $this->assertDatabaseCount('document_recipients', 0);
+        $this->assertDatabaseCount('destinatarios_documentos', 0);
     }
 
     public function test_stale_tab_cannot_add_a_second_recipient_or_lose_first_change(): void
@@ -378,9 +384,9 @@ class DocumentRecipientManagementTest extends TestCase
         $this->actingAs($creator)->post(route('documents.recipients.store', $document), $this->unitPayload($targetB, true, 0))
             ->assertSessionHasErrors('lock_version');
 
-        $this->assertDatabaseCount('document_recipients', 1);
-        $this->assertDatabaseHas('document_recipients', ['unit_id' => $targetA->id]);
-        $this->assertDatabaseMissing('document_recipients', ['unit_id' => $targetB->id]);
+        $this->assertDatabaseCount('destinatarios_documentos', 1);
+        $this->assertDatabaseHas('destinatarios_documentos', ['unit_id' => $targetA->id]);
+        $this->assertDatabaseMissing('destinatarios_documentos', ['unit_id' => $targetB->id]);
         $this->assertSame(1, $document->fresh()->lock_version);
     }
 
@@ -396,12 +402,12 @@ class DocumentRecipientManagementTest extends TestCase
         $this->actingAs($creator)->get(route('documents.show', $document))
             ->assertOk()
             ->assertSee('data-multi-career-form', false)
-            ->assertSee('Buscar carrera')
+            ->assertSee('Buscar carrera o Kardex')
             ->assertSee($origin->name)
             ->assertSee($second->name)
             ->assertSee('Ya es destinatario principal')
-            ->assertSee('0 carreras seleccionadas.')
-            ->assertSee('Agregar carreras seleccionadas')
+            ->assertSee('0 unidades seleccionadas.')
+            ->assertSee('Agregar unidades seleccionadas')
             ->assertSee('Copia informativa')
             ->assertSee('+ Agregar copia informativa')
             ->assertSee('name="requires_response" value="0"', false);

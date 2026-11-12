@@ -15,6 +15,8 @@ use LogicException;
 ])]
 class AuditLog extends Model
 {
+    protected $table = 'registros_auditoria';
+
     public $timestamps = false;
 
     public function actor(): BelongsTo

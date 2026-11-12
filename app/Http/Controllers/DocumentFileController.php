@@ -54,7 +54,7 @@ class DocumentFileController extends Controller
     {
         $documentFile->loadMissing('documentVersion');
         abort_unless($documentFile->documentVersion->document_id === $document->getKey(), 404);
-        Gate::authorize('downloadFile', $document);
+        Gate::authorize('downloadFile', [$document, $documentFile]);
         $validated = $request->validate([
             'presentation' => ['sometimes', 'required', 'string', Rule::in(['attachment', 'inline'])],
         ]);

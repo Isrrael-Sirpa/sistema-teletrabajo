@@ -41,7 +41,7 @@ class DocumentWorkflowTest extends TestCase
             DocumentTypeSeeder::class,
         ]);
 
-        Storage::fake('documents');
+        Storage::fake('documentos');
     }
 
     public function test_draft_with_recipient_can_be_sent_without_file_and_gets_official_fields(): void
@@ -61,15 +61,15 @@ class DocumentWorkflowTest extends TestCase
         $this->assertSame(1, $document->lock_version);
         $this->assertSame(DocumentRecipientStatus::SENT, $recipient->status);
         $this->assertSame(1, $recipient->lock_version);
-        $this->assertDatabaseCount('document_versions', 0);
-        $this->assertDatabaseHas('document_events', [
+        $this->assertDatabaseCount('versiones_documentos', 0);
+        $this->assertDatabaseHas('eventos_documentos', [
             'document_id' => $document->id,
             'event_type' => 'document_sent',
             'actor_id' => $creator->id,
             'from_status' => 'draft',
             'to_status' => 'sent',
         ]);
-        $this->assertDatabaseCount('notifications', 0);
+        $this->assertDatabaseCount('notificaciones', 0);
     }
 
     public function test_changing_a_career_acronym_keeps_sent_codes_and_only_affects_future_documents(): void
@@ -109,7 +109,7 @@ class DocumentWorkflowTest extends TestCase
         $this->assertSame(DocumentStatus::DRAFT, $document->general_status);
         $this->assertNull($document->code);
         $this->assertNull($document->sent_at);
-        $this->assertDatabaseCount('document_counters', 0);
+        $this->assertDatabaseCount('contadores_documentos', 0);
     }
 
     public function test_codes_are_unique_sequential_and_drafts_do_not_consume_numbers(): void
@@ -137,7 +137,7 @@ class DocumentWorkflowTest extends TestCase
         $this->recipient($document, $origin);
 
         $this->send($other, $document)->assertForbidden();
-        $this->assertDatabaseCount('document_counters', 0);
+        $this->assertDatabaseCount('contadores_documentos', 0);
 
         $this->send($creator, $document)->assertRedirect();
         $this->send($creator, $document, 1)->assertForbidden();
@@ -148,7 +148,7 @@ class DocumentWorkflowTest extends TestCase
     {
         [$document, $origin, $creator] = $this->draftContext();
         $destination = $this->career();
-        $receiver = $this->userWithRole(RoleName::SECRETARY, $destination);
+        $receiver = $this->userWithRole(RoleName::CAREER_HEAD, $destination);
         $recipient = $this->recipient($document, $destination);
 
         $this->send($creator, $document)->assertRedirect();
@@ -190,7 +190,7 @@ class DocumentWorkflowTest extends TestCase
     {
         [$document, , $creator] = $this->draftContext();
         $destination = $this->career();
-        $receiver = $this->userWithRole(RoleName::SECRETARY, $destination);
+        $receiver = $this->userWithRole(RoleName::CAREER_HEAD, $destination);
         $this->recipient($document, $destination);
         $this->send($creator, $document)->assertRedirect();
 
@@ -205,15 +205,16 @@ class DocumentWorkflowTest extends TestCase
             ->assertDontSee('Aprobar documento');
     }
 
-    public function test_personal_main_recipient_and_unit_copy_have_distinct_actions_and_visibility(): void
+    public function test_historical_personal_main_recipient_and_unit_copy_have_distinct_actions_and_visibility(): void
     {
         [$document, , $creator] = $this->draftContext();
         $destination = $this->career();
         $head = $this->userWithRole(RoleName::CAREER_HEAD, $destination);
         $secretary = $this->userWithRole(RoleName::SECRETARY, $destination);
-        $this->recipient($document, $destination, true, $head);
+        $recipient = $this->recipient($document, $destination, false, $head);
         $this->recipient($document, $destination, false);
         $this->send($creator, $document)->assertRedirect();
+        $recipient->update(['requires_response' => true]);
 
         $headPage = $this->actingAs($head)->get(route('documents.show', $document))->assertOk()
             ->assertSee('DOCUMENTO PARA SU ATENCIÓN')
@@ -227,7 +228,7 @@ class DocumentWorkflowTest extends TestCase
             ->assertSee('No necesita aprobarlo ni responderlo.')
             ->assertSee('Registrar recepción de copia')
             ->assertDontSee('>Recibir documento</button>', false)
-            ->assertDontSee('>Iniciar revisión</button>', false)
+            ->assertDontSee('>Iniciar revisión oficial</button>', false)
             ->assertDontSee('>Aprobar documento</button>', false);
     }
 
@@ -278,7 +279,7 @@ class DocumentWorkflowTest extends TestCase
             ->assertSee($waitingUnit->name);
     }
 
-    public function test_only_head_or_secretary_of_unit_can_receive_unit_recipient(): void
+    public function test_only_head_of_unit_can_receive_unit_recipient(): void
     {
         [$document, , $creator] = $this->draftContext();
         $destination = $this->career();
@@ -290,30 +291,25 @@ class DocumentWorkflowTest extends TestCase
 
         $this->transition($assistant, $document, $recipient, 'receive')->assertForbidden();
         $this->transition($outsider, $document, $recipient, 'receive')->assertForbidden();
-        $this->transition($secretary, $document, $recipient, 'receive')->assertRedirect();
+        $this->transition($secretary, $document, $recipient, 'receive')->assertForbidden();
+        $head = $this->userWithRole(RoleName::CAREER_HEAD, $destination);
+        $this->transition($head, $document, $recipient, 'receive')->assertRedirect();
 
         $recipient->refresh();
         $this->assertSame(DocumentRecipientStatus::RECEIVED, $recipient->status);
-        $this->assertSame($secretary->id, $recipient->received_by);
+        $this->assertSame($head->id, $recipient->received_by);
         $this->assertNotNull($recipient->received_at);
         $this->assertSame(DocumentStatus::RECEIVED, $document->fresh()->general_status);
-
-        $headDocument = $this->draft($creator, $document->originUnit);
-        $head = $this->userWithRole(RoleName::CAREER_HEAD, $destination);
-        $headRecipient = $this->recipient($headDocument, $destination);
-        $this->send($creator, $headDocument);
-        $this->transition($head, $headDocument, $headRecipient, 'receive')->assertRedirect();
-        $this->assertSame($head->id, $headRecipient->fresh()->received_by);
     }
 
-    public function test_personal_recipient_is_strict_and_global_administrator_cannot_receive(): void
+    public function test_personal_copy_receipt_is_strict_and_global_administrator_cannot_receive(): void
     {
         [$document, , $creator] = $this->draftContext();
         $destination = $this->career();
         $person = $this->userWithRole(RoleName::SECRETARY, $destination);
         $sameUnitHead = $this->userWithRole(RoleName::CAREER_HEAD, $destination);
         $administrator = $this->userWithRole(RoleName::ADMINISTRATOR);
-        $recipient = $this->recipient($document, $destination, true, $person);
+        $recipient = $this->recipient($document, $destination, false, $person);
         $this->send($creator, $document);
 
         $this->transition($sameUnitHead, $document, $recipient, 'receive')->assertForbidden();
@@ -327,46 +323,45 @@ class DocumentWorkflowTest extends TestCase
     {
         [$document, , $creator] = $this->draftContext();
         $destination = $this->career();
-        $secretary = $this->userWithRole(RoleName::SECRETARY, $destination);
+        $head = $this->userWithRole(RoleName::CAREER_HEAD, $destination);
         $recipient = $this->recipient($document, $destination);
         $this->send($creator, $document);
 
-        $this->transition($secretary, $document, $recipient, 'approve')->assertForbidden();
-        $this->transition($secretary, $document, $recipient, 'receive')->assertRedirect();
-        $this->transition($secretary, $document, $recipient, 'start_review')->assertRedirect();
+        $this->transition($head, $document, $recipient, 'approve')->assertForbidden();
+        $this->transition($head, $document, $recipient, 'receive')->assertRedirect();
+        $this->transition($head, $document, $recipient, 'start_review')->assertRedirect();
 
         $recipient->refresh();
         $this->assertSame(DocumentRecipientStatus::IN_REVIEW, $recipient->status);
-        $this->assertSame($secretary->id, $recipient->current_handler_id);
+        $this->assertSame($head->id, $recipient->current_handler_id);
         $this->assertSame(DocumentStatus::IN_REVIEW, $document->fresh()->general_status);
 
-        $this->transition($secretary, $document, $recipient, 'approve')->assertRedirect();
+        $this->transition($head, $document, $recipient, 'approve')->assertRedirect();
         $recipient->refresh();
         $this->assertSame(DocumentRecipientStatus::APPROVED, $recipient->status);
-        $this->assertSame($secretary->id, $recipient->decided_by);
+        $this->assertSame($head->id, $recipient->decided_by);
         $this->assertNotNull($recipient->decided_at);
         $this->assertSame(DocumentStatus::APPROVED, $document->fresh()->general_status);
     }
 
-    public function test_personal_head_and_secretary_can_complete_formal_flow(): void
+    public function test_responsible_can_complete_formal_flow_for_a_historical_personal_recipient(): void
     {
-        [$firstDocument, , $creator] = $this->draftContext();
-        $roles = [RoleName::CAREER_HEAD, RoleName::SECRETARY];
+        [$document, , $creator] = $this->draftContext();
+        $destination = $this->career();
+        $secretary = $this->userWithRole(RoleName::SECRETARY, $destination);
+        $head = $this->userWithRole(RoleName::CAREER_HEAD, $destination);
+        $recipient = $this->recipient($document, $destination, false, $secretary);
+        $this->send($creator, $document)->assertRedirect();
+        $recipient->update(['requires_response' => true]);
 
-        foreach ($roles as $index => $role) {
-            $document = $index === 0
-                ? $firstDocument
-                : $this->draft($creator, $firstDocument->originUnit);
-            $destination = $this->career();
-            $person = $this->userWithRole($role, $destination);
-            $recipient = $this->recipient($document, $destination, true, $person);
+        $this->transition($secretary, $document, $recipient, 'receive')->assertRedirect();
+        $this->transition($secretary, $document, $recipient, 'start_review')->assertForbidden();
+        $this->transition($head, $document, $recipient, 'start_review')->assertRedirect();
+        $this->transition($secretary, $document, $recipient, 'approve')->assertForbidden();
+        $this->transition($head, $document, $recipient, 'approve')->assertRedirect();
 
-            $this->send($creator, $document)->assertRedirect();
-            $this->receiveReviewApprove($person, $document, $recipient);
-
-            $this->assertSame(DocumentRecipientStatus::APPROVED, $recipient->fresh()->status);
-            $this->assertSame(DocumentStatus::APPROVED, $document->fresh()->general_status);
-        }
+        $this->assertSame(DocumentRecipientStatus::APPROVED, $recipient->fresh()->status);
+        $this->assertSame($head->id, $recipient->fresh()->decided_by);
     }
 
     public function test_send_revalidates_prepared_personal_recipient_eligibility(): void
@@ -388,19 +383,19 @@ class DocumentWorkflowTest extends TestCase
             $this->assertSame(DocumentRecipientStatus::PREPARED, $recipient->fresh()->status);
         }
 
-        $this->assertDatabaseCount('document_counters', 0);
+        $this->assertDatabaseCount('contadores_documentos', 0);
     }
 
     public function test_assistant_cannot_start_formal_review_or_approve_and_extra_cannot_transition(): void
     {
         [$document, , $creator] = $this->draftContext();
         $destination = $this->career();
-        $secretary = $this->userWithRole(RoleName::SECRETARY, $destination);
+        $head = $this->userWithRole(RoleName::CAREER_HEAD, $destination);
         $assistant = $this->userWithRole(RoleName::SECRETARY_ASSISTANT, $destination);
         $extra = $this->userWithRole(RoleName::EXTRA, $destination);
         $recipient = $this->recipient($document, $destination);
         $this->send($creator, $document);
-        $this->transition($secretary, $document, $recipient, 'receive');
+        $this->transition($head, $document, $recipient, 'receive');
 
         $this->actingAs($extra)->get(route('documents.show', $document))->assertForbidden();
         $this->transition($assistant, $document, $recipient, 'start_review')->assertForbidden();
@@ -409,12 +404,14 @@ class DocumentWorkflowTest extends TestCase
         $this->assertSame(DocumentRecipientStatus::RECEIVED, $recipient->fresh()->status);
     }
 
-    public function test_head_and_secretary_can_perform_all_five_formal_actions_for_their_unit(): void
+    public function test_responsibles_can_perform_all_five_formal_actions_for_their_units(): void
     {
         [$firstDocument, , $creator] = $this->draftContext();
-        $destination = $this->career();
 
-        foreach ([RoleName::CAREER_HEAD, RoleName::SECRETARY] as $role) {
+        foreach ([RoleName::CAREER_HEAD, RoleName::KARDEX_HEAD] as $role) {
+            $destination = $role === RoleName::KARDEX_HEAD
+                ? OrganizationalUnit::query()->where('type', 'kardex')->sole()
+                : $this->career();
             $actor = $this->userWithRole($role, $destination);
 
             foreach (DocumentTransition::cases() as $action) {
@@ -440,10 +437,10 @@ class DocumentWorkflowTest extends TestCase
     {
         [$firstDocument, , $creator] = $this->draftContext();
         $destination = $this->career();
-        $secretary = $this->userWithRole(RoleName::SECRETARY, $destination);
+        $head = $this->userWithRole(RoleName::CAREER_HEAD, $destination);
         $deniedActors = [];
 
-        foreach ([RoleName::SECRETARY_ASSISTANT, RoleName::EXTRA, RoleName::ADMINISTRATOR, RoleName::CO_ADMINISTRATOR] as $role) {
+        foreach ([RoleName::SECRETARY, RoleName::SECRETARY_ASSISTANT, RoleName::EXTRA, RoleName::ADMINISTRATOR, RoleName::CO_ADMINISTRATOR] as $role) {
             $actor = $this->userWithRole($role, $role->isGlobal() ? null : $destination);
             // Even direct capabilities must not bypass the institutional role rule.
             $actor->givePermissionTo([
@@ -465,7 +462,7 @@ class DocumentWorkflowTest extends TestCase
             $document = $this->draft($creator, $firstDocument->originUnit);
             $recipient = $this->recipient($document, $destination);
             $this->send($creator, $document)->assertRedirect();
-            $this->prepareForAction($secretary, $document, $recipient, $action);
+            $this->prepareForAction($head, $document, $recipient, $action);
             $before = $recipient->fresh()->getAttributes();
             $eventCount = $document->events()->count();
 
@@ -483,7 +480,7 @@ class DocumentWorkflowTest extends TestCase
     {
         [$document, , $creator] = $this->draftContext();
         $destination = $this->career();
-        $actor = $this->userWithRole(RoleName::SECRETARY, $destination);
+        $actor = $this->userWithRole(RoleName::CAREER_HEAD, $destination);
         $recipient = $this->recipient($document, $destination);
         $otherDocument = $this->draft($creator, $document->originUnit);
         $this->send($creator, $document);
@@ -499,14 +496,14 @@ class DocumentWorkflowTest extends TestCase
     {
         [$document, , $creator] = $this->draftContext();
         $destination = $this->career();
-        $secretary = $this->userWithRole(RoleName::SECRETARY, $destination);
+        $head = $this->userWithRole(RoleName::CAREER_HEAD, $destination);
         $copy = $this->recipient($document, $destination, false);
         $this->send($creator, $document);
 
-        $this->transition($secretary, $document, $copy, 'receive')->assertRedirect();
+        $this->transition($head, $document, $copy, 'receive')->assertRedirect();
 
         foreach (['start_review', 'approve', 'return', 'reject'] as $action) {
-            $this->transition($secretary, $document, $copy, $action, 'Motivo suficiente')->assertForbidden();
+            $this->transition($head, $document, $copy, $action, 'Motivo suficiente')->assertForbidden();
         }
 
         $this->assertSame(DocumentRecipientStatus::RECEIVED, $copy->fresh()->status);
@@ -518,7 +515,7 @@ class DocumentWorkflowTest extends TestCase
         [$document, , $creator] = $this->draftContext();
         $formalUnit = $this->career();
         $assistantUnit = $this->career();
-        $secretary = $this->userWithRole(RoleName::SECRETARY, $formalUnit);
+        $head = $this->userWithRole(RoleName::CAREER_HEAD, $formalUnit);
         $assistant = $this->userWithRole(RoleName::SECRETARY_ASSISTANT, $assistantUnit);
         $formal = $this->recipient($document, $formalUnit);
         $copy = $this->recipient($document, $assistantUnit, false, $assistant);
@@ -526,7 +523,7 @@ class DocumentWorkflowTest extends TestCase
         $this->send($creator, $document)->assertRedirect();
         $this->actingAs($assistant)->get(route('documents.show', $document))->assertOk();
         $this->transition($assistant, $document, $copy, 'receive')->assertForbidden();
-        $this->receiveReviewApprove($secretary, $document, $formal);
+        $this->receiveReviewApprove($head, $document, $formal);
 
         $this->assertSame(DocumentRecipientStatus::SENT, $copy->fresh()->status);
         $this->assertSame(DocumentStatus::APPROVED, $document->fresh()->general_status);
@@ -536,15 +533,15 @@ class DocumentWorkflowTest extends TestCase
     {
         [$returnedDocument, , $creator] = $this->draftContext();
         $destination = $this->career();
-        $secretary = $this->userWithRole(RoleName::SECRETARY, $destination);
+        $head = $this->userWithRole(RoleName::CAREER_HEAD, $destination);
         $returned = $this->recipient($returnedDocument, $destination);
         $this->send($creator, $returnedDocument);
-        $this->transition($secretary, $returnedDocument, $returned, 'receive');
-        $this->transition($secretary, $returnedDocument, $returned, 'start_review');
+        $this->transition($head, $returnedDocument, $returned, 'receive');
+        $this->transition($head, $returnedDocument, $returned, 'start_review');
 
-        $this->transition($secretary, $returnedDocument, $returned, 'return', '   ')
+        $this->transition($head, $returnedDocument, $returned, 'return', '   ')
             ->assertSessionHasErrors('reason');
-        $this->transition($secretary, $returnedDocument, $returned, 'return', 'Debe corregir los anexos.')
+        $this->transition($head, $returnedDocument, $returned, 'return', 'Debe corregir los anexos.')
             ->assertRedirect();
 
         $returned->refresh();
@@ -555,8 +552,8 @@ class DocumentWorkflowTest extends TestCase
         $rejectedDocument = $this->draft($creator, $returnedDocument->originUnit);
         $rejected = $this->recipient($rejectedDocument, $destination);
         $this->send($creator, $rejectedDocument);
-        $this->transition($secretary, $rejectedDocument, $rejected, 'receive');
-        $this->transition($secretary, $rejectedDocument, $rejected, 'reject', 'No corresponde al trámite.')
+        $this->transition($head, $rejectedDocument, $rejected, 'receive');
+        $this->transition($head, $rejectedDocument, $rejected, 'reject', 'No corresponde al trámite.')
             ->assertRedirect();
 
         $this->assertSame(DocumentRecipientStatus::REJECTED, $rejected->fresh()->status);
@@ -569,8 +566,8 @@ class DocumentWorkflowTest extends TestCase
         $unitA = $this->career();
         $unitB = $this->career();
         $copyUnit = $this->career();
-        $actorA = $this->userWithRole(RoleName::SECRETARY, $unitA);
-        $actorB = $this->userWithRole(RoleName::SECRETARY, $unitB);
+        $actorA = $this->userWithRole(RoleName::CAREER_HEAD, $unitA);
+        $actorB = $this->userWithRole(RoleName::CAREER_HEAD, $unitB);
         $requiredA = $this->recipient($document, $unitA);
         $requiredB = $this->recipient($document, $unitB);
         $copy = $this->recipient($document, $copyUnit, false);
@@ -595,8 +592,8 @@ class DocumentWorkflowTest extends TestCase
         [$document, , $creator] = $this->draftContext();
         $unitA = $this->career();
         $unitB = $this->career();
-        $actorA = $this->userWithRole(RoleName::SECRETARY, $unitA);
-        $actorB = $this->userWithRole(RoleName::SECRETARY, $unitB);
+        $actorA = $this->userWithRole(RoleName::CAREER_HEAD, $unitA);
+        $actorB = $this->userWithRole(RoleName::CAREER_HEAD, $unitB);
         $recipientA = $this->recipient($document, $unitA);
         $recipientB = $this->recipient($document, $unitB);
         $this->send($creator, $document);
@@ -624,20 +621,20 @@ class DocumentWorkflowTest extends TestCase
     {
         [$document, , $creator] = $this->draftContext();
         $destination = $this->career();
-        $secretary = $this->userWithRole(RoleName::SECRETARY, $destination);
+        $head = $this->userWithRole(RoleName::CAREER_HEAD, $destination);
         $recipient = $this->recipient($document, $destination);
         $this->send($creator, $document);
-        $this->transition($secretary, $document, $recipient, 'receive');
-        $this->transition($secretary, $document, $recipient, 'start_review');
+        $this->transition($head, $document, $recipient, 'receive');
+        $this->transition($head, $document, $recipient, 'start_review');
 
         $staleDocumentVersion = $document->fresh()->lock_version;
         $staleRecipientVersion = $recipient->fresh()->lock_version;
 
-        $this->transition($secretary, $document, $recipient, 'approve')->assertRedirect();
+        $this->transition($head, $document, $recipient, 'approve')->assertRedirect();
 
         try {
             app(DocumentWorkflowService::class)->transition(
-                $secretary,
+                $head,
                 $document,
                 $recipient,
                 DocumentTransition::RETURN,
@@ -676,7 +673,7 @@ class DocumentWorkflowTest extends TestCase
             'recipient_id' => $recipient->id,
             'lock_version' => 1,
         ])->assertForbidden();
-        $this->assertDatabaseCount('document_recipients', 1);
+        $this->assertDatabaseCount('destinatarios_documentos', 1);
     }
 
     private function prepareForAction(User $actor, Document $document, DocumentRecipient $recipient, DocumentTransition $action): void

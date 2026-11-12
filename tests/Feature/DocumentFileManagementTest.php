@@ -42,7 +42,7 @@ class DocumentFileManagementTest extends TestCase
             DocumentTypeSeeder::class,
         ]);
 
-        Storage::fake('documents');
+        Storage::fake('documentos');
     }
 
     protected function tearDown(): void
@@ -77,17 +77,17 @@ class DocumentFileManagementTest extends TestCase
         $this->assertSame('application/pdf', $file->detected_mime_type);
         $this->assertSame(strlen($contents), $file->size_bytes);
         $this->assertSame(hash('sha256', $contents), $file->sha256);
-        $this->assertSame('documents', $file->disk);
+        $this->assertSame('documentos', $file->disk);
         $this->assertStringStartsWith($document->public_id.'/version-1/', $file->path);
         $this->assertStringNotContainsString('informe final', $file->path);
         $this->assertMatchesRegularExpression('/^[0-9a-f-]{36}\.pdf$/', $file->stored_name);
-        Storage::disk('documents')->assertExists($file->path);
+        Storage::disk('documentos')->assertExists($file->path);
         $this->assertSame(DocumentStatus::DRAFT, $document->general_status);
         $this->assertSame(1, $document->lock_version);
         $this->assertNull($document->code);
         $this->assertNull($document->sent_at);
-        $this->assertDatabaseCount('notifications', 0);
-        $this->assertDatabaseHas('document_events', [
+        $this->assertDatabaseCount('notificaciones', 0);
+        $this->assertDatabaseHas('eventos_documentos', [
             'document_id' => $document->id,
             'event_type' => 'file_added',
             'actor_id' => $creator->id,
@@ -112,8 +112,8 @@ class DocumentFileManagementTest extends TestCase
             'lock_version' => 1,
         ])->assertRedirect();
 
-        $this->assertDatabaseCount('document_versions', 1);
-        $this->assertDatabaseCount('document_files', 4);
+        $this->assertDatabaseCount('versiones_documentos', 1);
+        $this->assertDatabaseCount('archivos_documentos', 4);
         $this->assertSame([1], DocumentVersion::query()->pluck('version_number')->all());
         $this->assertSame(2, $document->fresh()->lock_version);
     }
@@ -131,9 +131,9 @@ class DocumentFileManagementTest extends TestCase
             'lock_version' => 0,
         ])->assertRedirect();
 
-        $this->assertDatabaseHas('document_files', ['extension' => 'png', 'detected_mime_type' => 'image/png']);
-        $this->assertDatabaseHas('document_files', ['extension' => 'zip']);
-        $this->assertCount(2, Storage::disk('documents')->allFiles());
+        $this->assertDatabaseHas('archivos_documentos', ['extension' => 'png', 'detected_mime_type' => 'image/png']);
+        $this->assertDatabaseHas('archivos_documentos', ['extension' => 'zip']);
+        $this->assertCount(2, Storage::disk('documentos')->allFiles());
     }
 
     public function test_invalid_extension_mime_and_oversized_file_are_rejected_without_orphans(): void
@@ -155,9 +155,9 @@ class DocumentFileManagementTest extends TestCase
             'lock_version' => 0,
         ])->assertSessionHasErrors('files.0');
 
-        $this->assertDatabaseCount('document_versions', 0);
-        $this->assertDatabaseCount('document_files', 0);
-        $this->assertSame([], Storage::disk('documents')->allFiles());
+        $this->assertDatabaseCount('versiones_documentos', 0);
+        $this->assertDatabaseCount('archivos_documentos', 0);
+        $this->assertSame([], Storage::disk('documentos')->allFiles());
         $this->assertSame(0, $document->fresh()->lock_version);
     }
 
@@ -178,7 +178,7 @@ class DocumentFileManagementTest extends TestCase
                 ->assertForbidden();
         }
 
-        $this->assertDatabaseCount('document_files', 1);
+        $this->assertDatabaseCount('archivos_documentos', 1);
     }
 
     public function test_authorized_download_uses_original_name_and_file_cannot_cross_documents(): void
@@ -204,9 +204,9 @@ class DocumentFileManagementTest extends TestCase
             'lock_version' => 1,
         ])->assertRedirect()->assertSessionHas('status');
 
-        Storage::disk('documents')->assertMissing($file->path);
-        $this->assertDatabaseCount('document_files', 0);
-        $this->assertDatabaseCount('document_versions', 0);
+        Storage::disk('documentos')->assertMissing($file->path);
+        $this->assertDatabaseCount('archivos_documentos', 0);
+        $this->assertDatabaseCount('versiones_documentos', 0);
         $this->assertSame(2, $document->fresh()->lock_version);
     }
 
@@ -232,7 +232,7 @@ class DocumentFileManagementTest extends TestCase
 
         $this->actingAs($creator)->get(route('documents.files.download', [$document, $file]))
             ->assertOk();
-        Storage::disk('documents')->assertExists($file->path);
+        Storage::disk('documentos')->assertExists($file->path);
     }
 
     public function test_stale_upload_is_rejected_without_creating_file_or_empty_version(): void
@@ -246,9 +246,9 @@ class DocumentFileManagementTest extends TestCase
             'lock_version' => 0,
         ])->assertSessionHasErrors('lock_version');
 
-        $this->assertDatabaseCount('document_versions', 1);
-        $this->assertDatabaseCount('document_files', 1);
-        $this->assertCount(1, Storage::disk('documents')->allFiles());
+        $this->assertDatabaseCount('versiones_documentos', 1);
+        $this->assertDatabaseCount('archivos_documentos', 1);
+        $this->assertCount(1, Storage::disk('documentos')->allFiles());
         $this->assertSame(1, $document->fresh()->lock_version);
     }
 
@@ -271,9 +271,9 @@ class DocumentFileManagementTest extends TestCase
             Event::forget($event);
         }
 
-        $this->assertDatabaseCount('document_versions', 0);
-        $this->assertDatabaseCount('document_files', 0);
-        $this->assertSame([], Storage::disk('documents')->allFiles());
+        $this->assertDatabaseCount('versiones_documentos', 0);
+        $this->assertDatabaseCount('archivos_documentos', 0);
+        $this->assertSame([], Storage::disk('documentos')->allFiles());
         $this->assertSame(0, $document->fresh()->lock_version);
     }
 

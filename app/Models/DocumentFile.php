@@ -15,6 +15,8 @@ class DocumentFile extends Model
 {
     use HasUuids;
 
+    protected $table = 'archivos_documentos';
+
     public $timestamps = false;
 
     /** @return array<int, string> */

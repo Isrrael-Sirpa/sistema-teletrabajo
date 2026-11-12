@@ -30,7 +30,7 @@ class DocumentReportService
     {
         $query = $this->search->query($user, Arr::except($filters, [
             'report', 'period_from', 'period_to', 'page',
-        ]));
+        ]), includeTasks: false);
 
         $this->applyReport($query, (string) ($filters['report'] ?? 'summary'));
         $this->applyPeriod(
@@ -57,7 +57,7 @@ class DocumentReportService
 
                 return ['label' => $priority?->label() ?? (string) $row['value'], 'count' => $row['count']];
             }),
-            'types' => $this->groupedRelation($query, 'document_types', 'document_type_id'),
+            'types' => $this->groupedRelation($query, (new DocumentType)->getTable(), 'document_type_id'),
             'units' => $this->unitSummary($query),
         ];
     }
@@ -65,13 +65,13 @@ class DocumentReportService
     /** @return array{units: Collection, people: Collection, documentTypes: Collection} */
     public function options(User $user): array
     {
-        $visible = fn () => Document::query()->visibleTo($user);
+        $visible = fn () => Document::query()->visibleTo($user, includeTasks: false);
         $units = OrganizationalUnit::query()
             ->where(function (Builder $query) use ($visible): void {
                 $query->whereIn('id', $visible()->select('origin_unit_id'))
                     ->orWhereIn('id', DocumentRecipient::query()
                         ->select('unit_id')
-                        ->whereIn('document_id', $visible()->select('documents.id')));
+                        ->whereIn('document_id', $visible()->select((new Document)->qualifyColumn('id'))));
             })
             ->orderBy('name')
             ->get();
@@ -93,17 +93,20 @@ class DocumentReportService
     /** @param Builder<Document> $query @return Collection<int, Document> */
     public function exportDocuments(Builder $query): Collection
     {
+        $doc = new Document;
+        $docTable = $doc->getTable();
+
         return $this->clean($query)
             ->select([
-                'documents.id', 'documents.code', 'documents.document_type_id',
-                'documents.origin_unit_id', 'documents.sender_user_id', 'documents.subject',
-                'documents.general_status', 'documents.priority', 'documents.confidentiality',
-                'documents.sent_at', 'documents.due_at', 'documents.created_at',
+                "{$docTable}.id", "{$docTable}.code", "{$docTable}.document_type_id",
+                "{$docTable}.origin_unit_id", "{$docTable}.sender_user_id", "{$docTable}.subject",
+                "{$docTable}.general_status", "{$docTable}.priority", "{$docTable}.confidentiality",
+                "{$docTable}.sent_at", "{$docTable}.due_at", "{$docTable}.created_at",
             ])
             ->with(['documentType:id,name', 'originUnit:id,name', 'sender:id,name'])
             ->withCount('recipients')
-            ->orderByDesc('documents.created_at')
-            ->orderByDesc('documents.id')
+            ->orderByDesc("{$docTable}.created_at")
+            ->orderByDesc("{$docTable}.id")
             ->get();
     }
 
@@ -213,11 +216,13 @@ class DocumentReportService
     /** @param Builder<Document> $query @return Collection<int, array{value: string, count: int}> */
     private function grouped(Builder $query, string $column): Collection
     {
+        $docTable = (new Document)->getTable();
+
         return $this->aggregateBase($query)
-            ->select("documents.{$column}")
-            ->selectRaw('COUNT(documents.id) AS aggregate_count')
-            ->groupBy("documents.{$column}")
-            ->orderBy("documents.{$column}")
+            ->select("{$docTable}.{$column}")
+            ->selectRaw("COUNT({$docTable}.id) AS aggregate_count")
+            ->groupBy("{$docTable}.{$column}")
+            ->orderBy("{$docTable}.{$column}")
             ->get()
             ->map(fn (Document $row): array => [
                 'value' => $row->getRawOriginal($column),
@@ -228,10 +233,12 @@ class DocumentReportService
     /** @param Builder<Document> $query @return Collection<int, array{label: string, count: int}> */
     private function groupedRelation(Builder $query, string $table, string $foreignKey): Collection
     {
+        $docTable = (new Document)->getTable();
+
         return $this->aggregateBase($query)
-            ->join($table, "{$table}.id", '=', "documents.{$foreignKey}")
+            ->join($table, "{$table}.id", '=', "{$docTable}.{$foreignKey}")
             ->select("{$table}.name AS aggregate_label")
-            ->selectRaw('COUNT(documents.id) AS aggregate_count')
+            ->selectRaw("COUNT({$docTable}.id) AS aggregate_count")
             ->groupBy("{$table}.id", "{$table}.name")
             ->orderBy("{$table}.name")
             ->get()
@@ -244,19 +251,22 @@ class DocumentReportService
     /** @param Builder<Document> $query @return Collection<int, array<string, mixed>> */
     private function unitSummary(Builder $query): Collection
     {
+        $docTable = (new Document)->getTable();
+        $unitTable = (new OrganizationalUnit)->getTable();
+
         $rows = $this->aggregateBase($query)
-            ->join('organizational_units AS report_units', 'report_units.id', '=', 'documents.origin_unit_id')
-            ->select(['report_units.id AS unit_id', 'report_units.name AS unit_name', 'documents.general_status'])
-            ->selectRaw('COUNT(documents.id) AS aggregate_count')
-            ->groupBy('report_units.id', 'report_units.name', 'documents.general_status')
+            ->join("{$unitTable} AS report_units", 'report_units.id', '=', "{$docTable}.origin_unit_id")
+            ->select(['report_units.id AS unit_id', 'report_units.name AS unit_name', "{$docTable}.general_status"])
+            ->selectRaw("COUNT({$docTable}.id) AS aggregate_count")
+            ->groupBy('report_units.id', 'report_units.name', "{$docTable}.general_status")
             ->orderBy('report_units.name')
             ->get();
 
         $overdue = $this->aggregateBase($query)
             ->overdue($this->deadlines->normalizeNow())
-            ->select('documents.origin_unit_id')
-            ->selectRaw('COUNT(documents.id) AS aggregate_count')
-            ->groupBy('documents.origin_unit_id')
+            ->select("{$docTable}.origin_unit_id")
+            ->selectRaw("COUNT({$docTable}.id) AS aggregate_count")
+            ->groupBy("{$docTable}.origin_unit_id")
             ->pluck('aggregate_count', 'origin_unit_id');
 
         return $rows->groupBy('unit_id')->map(function (Collection $unitRows, int|string $unitId) use ($overdue): array {
@@ -290,9 +300,11 @@ class DocumentReportService
      */
     private function aggregateBase(Builder $query): Builder
     {
+        $idCol = (new Document)->qualifyColumn('id');
+
         return Document::query()->whereIn(
-            'documents.id',
-            $this->clean($query)->select('documents.id'),
+            $idCol,
+            $this->clean($query)->select($idCol),
         );
     }
 

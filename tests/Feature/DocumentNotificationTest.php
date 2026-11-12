@@ -38,7 +38,7 @@ class DocumentNotificationTest extends TestCase
         ]);
     }
 
-    public function test_send_notifies_direct_person_and_only_active_head_and_secretary_of_a_unit_without_duplicates(): void
+    public function test_send_notifies_direct_person_and_active_responsible_of_the_unit_without_duplicates(): void
     {
         [$document, $origin, $actor] = $this->documentContext();
         $destination = $this->career();
@@ -59,12 +59,12 @@ class DocumentNotificationTest extends TestCase
         );
 
         $this->assertSame(1, $head->notifications()->count());
-        $this->assertSame(1, $secretary->notifications()->count());
+        $this->assertSame(0, $secretary->notifications()->count());
         $this->assertSame(1, $direct->notifications()->count());
         $this->assertSame(0, $inactiveSecretary->notifications()->count());
         $this->assertSame(0, $extra->notifications()->count());
         $this->assertSame(0, $actor->notifications()->count());
-        $this->assertDatabaseCount('notifications', 3);
+        $this->assertDatabaseCount('notificaciones', 2);
         $this->assertSame($origin->id, $document->origin_unit_id);
     }
 
@@ -109,7 +109,7 @@ class DocumentNotificationTest extends TestCase
         $this->assertNotNull($rejectionNotification);
         $this->assertSame('Motivo institucional.', $returnNotification->data['reason']);
         $this->assertStringContainsString('Motivo: Motivo institucional.', $returnNotification->data['message']);
-        $this->assertDatabaseHas('notifications', [
+        $this->assertDatabaseHas('notificaciones', [
             'notifiable_id' => $creator->id,
             'type' => 'App\\Notifications\\DocumentDecisionNotification',
         ]);

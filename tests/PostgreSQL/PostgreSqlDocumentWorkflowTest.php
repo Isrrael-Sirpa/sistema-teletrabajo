@@ -10,10 +10,12 @@ use App\Enums\DocumentTransition;
 use App\Enums\RoleName;
 use App\Models\Document;
 use App\Models\DocumentRecipient;
+use App\Models\DocumentReviewTask;
 use App\Models\DocumentType;
 use App\Models\DocumentVersion;
 use App\Models\OrganizationalUnit;
 use App\Models\User;
+use App\Services\DocumentReviewService;
 use App\Services\DocumentWorkflowService;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -43,6 +45,8 @@ class PostgreSqlDocumentWorkflowTest extends TestCase
         Document::withTrashed()->whereIn('id', $this->documentIds)->pluck('public_id')
             ->each(fn (string $publicId) => Storage::disk('documents')->deleteDirectory($publicId));
         DB::table('document_events')->whereIn('document_id', $this->documentIds)->delete();
+        DocumentReviewTask::query()->whereHas('recipient', fn ($recipients) => $recipients
+            ->whereIn('document_id', $this->documentIds))->delete();
         DB::table('document_recipients')->whereIn('document_id', $this->documentIds)->delete();
         DB::table('document_files')->whereIn(
             'document_version_id',
@@ -152,6 +156,7 @@ class PostgreSqlDocumentWorkflowTest extends TestCase
         $recipient = $this->recipient($document, $unit);
         $service = app(DocumentWorkflowService::class);
         $service->send($actor, $document, 0);
+        $actor = $this->userWithRole(RoleName::CAREER_HEAD, $unit);
         $service->transition($actor, $document, $recipient, DocumentTransition::RECEIVE, 1, 1);
         $service->transition($actor, $document, $recipient, DocumentTransition::START_REVIEW, 2, 2);
         $documentVersion = $document->fresh()->lock_version;
@@ -201,8 +206,9 @@ class PostgreSqlDocumentWorkflowTest extends TestCase
         $recipient = $this->recipient($document, $unit);
         $service = app(DocumentWorkflowService::class);
         $service->send($creator, $document, 0);
-        $service->transition($creator, $document, $recipient, DocumentTransition::RECEIVE, 1, 1);
-        $service->transition($creator, $document, $recipient, DocumentTransition::START_REVIEW, 2, 2);
+        $head = $this->userWithRole(RoleName::CAREER_HEAD, $unit);
+        $service->transition($head, $document, $recipient, DocumentTransition::RECEIVE, 1, 1);
+        $service->transition($head, $document, $recipient, DocumentTransition::START_REVIEW, 2, 2);
         $administrator = $this->userWithRole(RoleName::ADMINISTRATOR);
         $documentVersion = $document->fresh()->lock_version;
         $recipientVersion = $recipient->fresh()->lock_version;
@@ -214,7 +220,7 @@ class PostgreSqlDocumentWorkflowTest extends TestCase
                 'Anulación concurrente PostgreSQL.',
             ]),
             $this->startWorker($worker, $barrier, [
-                'transition', $creator->id, $document->id, $recipient->id, 'approve',
+                'transition', $head->id, $document->id, $recipient->id, 'approve',
                 $documentVersion, $recipientVersion, '',
             ]),
         ];
@@ -256,6 +262,52 @@ class PostgreSqlDocumentWorkflowTest extends TestCase
             ->where('document_id', $document->id)
             ->where('event_type', 'document_annulled')
             ->count());
+    }
+
+    public function test_concurrent_internal_submission_and_official_approval_leave_a_consistent_review(): void
+    {
+        [$document, $unit, $creator] = $this->context();
+        $head = $this->userWithRole(RoleName::CAREER_HEAD, $unit);
+        $reviewer = $this->userWithRole(RoleName::SECRETARY_ASSISTANT, $unit);
+        $recipient = $this->recipient($document, $unit);
+        $workflow = app(DocumentWorkflowService::class);
+        $workflow->send($creator, $document, 0);
+        $workflow->transition($head, $document, $recipient, DocumentTransition::RECEIVE, 1, 1);
+        $workflow->transition($head, $document, $recipient, DocumentTransition::START_REVIEW, 2, 2);
+        app(DocumentReviewService::class)->assign($head, $document, $recipient, [
+            'assigned_to' => $reviewer->id,
+            'assignment_key' => (string) Str::uuid(),
+            'recipient_lock_version' => $recipient->fresh()->lock_version,
+            'instructions' => 'Revisar los respaldos.',
+        ]);
+        $task = $recipient->reviewTasks()->sole();
+        [$worker, $barrier] = $this->worker();
+
+        $submission = $this->startWorker($worker, $barrier, ['submit', $reviewer->id, $document->id, $task->id]);
+        $approval = $this->startWorker($worker, $barrier, [
+            'transition', $head->id, $document->id, $recipient->id, 'approve',
+            $document->fresh()->lock_version, $recipient->fresh()->lock_version, '',
+        ]);
+        file_put_contents($barrier, 'go');
+        $submission->wait();
+        $approval->wait();
+
+        $this->assertTrue($submission->isSuccessful(), $submission->getErrorOutput());
+        $this->assertTrue($approval->isSuccessful(), $approval->getErrorOutput());
+        $this->assertSame('ok:approve', trim($approval->getOutput()));
+        $this->assertSame($head->id, $recipient->fresh()->decided_by);
+
+        $task->refresh();
+        if (trim($submission->getOutput()) === 'ok:submit') {
+            $this->assertSame('Resultado de revisión.', $task->message);
+            $this->assertNotNull($task->submitted_at);
+            $this->assertNull($task->closed_at);
+        } else {
+            $this->assertSame('conflict', trim($submission->getOutput()));
+            $this->assertNull($task->message);
+            $this->assertNull($task->submitted_at);
+            $this->assertNotNull($task->closed_at);
+        }
     }
 
     public function test_concurrent_correction_preparation_creates_only_one_version_two(): void
@@ -417,6 +469,14 @@ try {
         $service = app(App\Services\DocumentWorkflowService::class);
         $annulled = $service->annul($actor, $document, (int) $argv[6], $argv[7]);
         echo 'ok:'.$annulled->general_status->value;
+        exit(0);
+    }
+    if ($argv[3] === 'submit') {
+        $task = App\Models\DocumentReviewTask::query()->findOrFail((int) $argv[6]);
+        app(App\Services\DocumentReviewService::class)->submit(
+            $actor, $document, $task, App\Enums\ReviewRecommendation::APPROVE, 'Resultado de revisión.',
+        );
+        echo 'ok:submit';
         exit(0);
     }
     $service = app(App\Services\DocumentWorkflowService::class);

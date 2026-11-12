@@ -12,7 +12,7 @@
     };
 @endphp
 
-<article class="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
+<article @unless ($summaryAction && $ownRecipient?->id === $recipient->id) id="destino-{{ $recipient->id }}" tabindex="-1" @endunless class="scroll-mt-24 rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
     <p class="text-xs font-bold uppercase tracking-wide {{ $recipient->requires_response ? 'text-blue-800' : 'text-slate-600' }}">{{ $recipient->requires_response ? 'Destinatario principal' : 'Copia informativa' }}</p>
     <div class="mt-2 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div class="min-w-0">
@@ -49,7 +49,7 @@
                     @method('PATCH')
                     <input type="hidden" name="document_lock_version" value="{{ $document->lock_version }}">
                     <input type="hidden" name="recipient_lock_version" value="{{ $recipient->lock_version }}">
-                    <button type="submit" class="ft-button-primary">Iniciar revisión</button>
+                    <button type="submit" class="ft-button-primary">Iniciar revisión oficial</button>
                 </form>
             @endcan
             @can('approveRecipient', [$document, $recipient])

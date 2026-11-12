@@ -16,6 +16,8 @@ class OrganizationalUnit extends Model
 {
     use HasFactory, HasUuids;
 
+    protected $table = 'unidades_organizacionales';
+
     /**
      * @return array<int, string>
      */

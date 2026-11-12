@@ -13,6 +13,8 @@ class DocumentType extends Model
 {
     use HasUuids;
 
+    protected $table = 'tipos_documentos';
+
     /**
      * @return array<int, string>
      */

@@ -30,7 +30,7 @@ class UserController extends Controller
         $filters = $request->validate([
             'search' => ['nullable', 'string', 'max:100'],
             'role' => ['nullable', Rule::enum(RoleName::class)],
-            'unit' => ['nullable', 'integer', 'exists:organizational_units,id'],
+            'unit' => ['nullable', 'integer', Rule::exists(OrganizationalUnit::class, 'id')],
             'status' => ['nullable', Rule::enum(UserStatus::class)],
         ]);
 
@@ -64,9 +64,9 @@ class UserController extends Controller
         $users = $query->orderBy('name')->paginate(15)->withQueryString();
         $roles = RoleName::cases();
         $statuses = UserStatus::cases();
-        $careers = OrganizationalUnit::query()->careers()->orderBy('name')->get();
+        $units = OrganizationalUnit::query()->whereIn('type', ['career', 'kardex'])->orderBy('name')->get();
 
-        return view('users.index', compact('users', 'roles', 'statuses', 'careers'));
+        return view('users.index', compact('users', 'roles', 'statuses', 'units'));
     }
 
     public function show(User $user): View
@@ -156,13 +156,12 @@ class UserController extends Controller
     }
 
     /**
-     * @return array{roles: array<int, RoleName>, statuses: array<int, UserStatus>, careers: mixed}
+     * @return array{roles: array<int, RoleName>, statuses: array<int, UserStatus>, units: mixed}
      */
     private function formData(User $actor): array
     {
-        $careers = OrganizationalUnit::query()
-            ->careers()
-            ->active()
+        $units = OrganizationalUnit::query()
+            ->availableAsDocumentDestination()
             ->when(
                 ! $actor->hasInstitutionalGlobalScope(),
                 fn ($query) => $query->whereKey($actor->organizational_unit_id),
@@ -173,7 +172,7 @@ class UserController extends Controller
         return [
             'roles' => $this->users->allowedRolesFor($actor),
             'statuses' => UserStatus::cases(),
-            'careers' => $careers,
+            'units' => $units,
         ];
     }
 }

@@ -49,7 +49,7 @@ class DocumentHistoryTest extends TestCase
             DocumentTypeSeeder::class,
         ]);
 
-        Storage::fake('documents');
+        Storage::fake('documentos');
     }
 
     protected function tearDown(): void
@@ -87,7 +87,7 @@ class DocumentHistoryTest extends TestCase
 
         $service->discard($actor, $document);
 
-        $this->assertSoftDeleted('documents', ['id' => $document->id]);
+        $this->assertSoftDeleted('documentos', ['id' => $document->id]);
         $this->assertSame(3, DocumentEvent::query()->where('document_id', $document->id)->count());
         $discarded = DocumentEvent::query()->where('event_type', DocumentEventType::DRAFT_DISCARDED)->sole();
         $this->assertSame($actor->id, $discarded->actor_id);
@@ -116,7 +116,7 @@ class DocumentHistoryTest extends TestCase
             'lock_version' => 2,
         ]);
 
-        $this->assertSoftDeleted('document_recipients', ['id' => $recipient->id]);
+        $this->assertSoftDeleted('destinatarios_documentos', ['id' => $recipient->id]);
         $this->assertCount(0, $document->fresh()->recipients);
         $this->assertSame(
             ['recipient_added', 'recipient_updated', 'recipient_removed'],
@@ -126,7 +126,7 @@ class DocumentHistoryTest extends TestCase
         $this->assertSame($recipient->id, $removed->recipient->id);
         $this->assertTrue($removed->recipient->trashed());
 
-        DB::table('document_recipients')->where('id', $recipient->id)->update([
+        DB::table('destinatarios_documentos')->where('id', $recipient->id)->update([
             'status' => DocumentRecipientStatus::RECEIVED->value,
             'received_by' => $actor->id,
             'received_at' => now(),
@@ -177,7 +177,7 @@ class DocumentHistoryTest extends TestCase
     {
         [$document, , $sender] = $this->context();
         $destination = $this->career();
-        $receiver = $this->userWithRole(RoleName::SECRETARY, $destination);
+        $receiver = $this->userWithRole(RoleName::CAREER_HEAD, $destination);
         $recipient = $this->recipient($document, $destination);
         $workflow = app(DocumentWorkflowService::class);
 
@@ -212,7 +212,7 @@ class DocumentHistoryTest extends TestCase
     {
         [, $origin, $sender] = $this->context();
         $destination = $this->career();
-        $actor = $this->userWithRole(RoleName::SECRETARY, $destination);
+        $actor = $this->userWithRole(RoleName::CAREER_HEAD, $destination);
         $workflow = app(DocumentWorkflowService::class);
 
         foreach ([
@@ -247,7 +247,7 @@ class DocumentHistoryTest extends TestCase
             });
             $this->fail('La transacción simulada no falló.');
         } catch (ValidationException) {
-            $this->assertDatabaseCount('document_events', 0);
+            $this->assertDatabaseCount('eventos_documentos', 0);
         }
     }
 
@@ -270,7 +270,7 @@ class DocumentHistoryTest extends TestCase
             $this->assertSame('Los eventos documentales no pueden eliminarse.', $exception->getMessage());
         }
 
-        $this->assertDatabaseHas('document_events', ['id' => $event->id, 'reason' => null]);
+        $this->assertDatabaseHas('eventos_documentos', ['id' => $event->id, 'reason' => null]);
     }
 
     public function test_history_view_is_authorized_paginated_and_newest_first(): void

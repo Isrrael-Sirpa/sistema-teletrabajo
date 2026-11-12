@@ -27,10 +27,10 @@
             </div>
             @if (auth()->user()->hasInstitutionalGlobalScope())
                 <div>
-                    <label for="unit" class="block text-sm font-semibold text-slate-800">Carrera</label>
+                    <label for="unit" class="block text-sm font-semibold text-slate-800">Unidad</label>
                     <select id="unit" name="unit" class="mt-2 block min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
-                        <option value="">Todas las carreras</option>
-                        @foreach ($careers as $career)
+                        <option value="">Todas las unidades</option>
+                        @foreach ($units as $career)
                             <option value="{{ $career->id }}" @selected((string) request('unit') === (string) $career->id)>{{ $career->name }}</option>
                         @endforeach
                     </select>

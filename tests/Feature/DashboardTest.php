@@ -27,11 +27,19 @@ class DashboardTest extends TestCase
 {
     use RefreshDatabase;
 
+    private OrganizationalUnit $faculty;
+
     protected function setUp(): void
     {
         parent::setUp();
 
         $this->seed([AuthorizationSeeder::class, DocumentTypeSeeder::class]);
+        $this->faculty = OrganizationalUnit::query()->create([
+            'type' => 'faculty',
+            'name' => 'Facultad de prueba',
+            'acronym' => 'FTEC',
+            'is_active' => true,
+        ]);
     }
 
     public function test_administrator_sees_global_operational_summary_and_links(): void
@@ -77,7 +85,8 @@ class DashboardTest extends TestCase
         $response = $this->actingAs($head)->get(route('dashboard'));
 
         $response->assertOk()->assertSee($careerA->name)->assertSee($visible->subject)->assertDontSee($hidden->subject);
-        $this->assertSame(1, $this->cardCount($response->viewData('cards'), 'Pendientes de recibir'));
+        $this->assertSame([$visible->id], $response->viewData('unitPending')->pluck('document.id')->all());
+        $response->assertSee('Documentos pendientes')->assertSee('Recibir documento')->assertSee('Tareas del equipo');
     }
 
     public function test_secretary_sees_only_permitted_daily_work_and_own_drafts(): void
@@ -90,27 +99,35 @@ class DashboardTest extends TestCase
 
         $response = $this->actingAs($secretary)->get(route('dashboard'));
 
-        $response->assertOk()->assertDontSee($otherDraft->subject);
+        $response->assertOk()->assertSee('Mis tareas')->assertDontSee($otherDraft->subject);
+        $response->assertDontSee('Tareas del equipo');
         $this->assertSame(1, $this->cardCount($response->viewData('cards'), 'Mis borradores'));
-        $this->assertNotNull(collect($response->viewData('cards'))->firstWhere('label', 'Requieren decisión'));
+        $this->assertNull(collect($response->viewData('cards'))->firstWhere('label', 'Requieren decisión'));
     }
 
-    public function test_assistant_has_collaboration_and_assignment_without_formal_decisions(): void
+    public function test_assistant_sees_assigned_tasks_without_formal_decisions(): void
     {
         $origin = $this->career('Civil', 'CIV');
         $destination = $this->career('Construcciones', 'CON');
         $assistant = $this->user(RoleName::SECRETARY_ASSISTANT, $destination);
         $creator = $this->user(RoleName::SECRETARY, $origin);
         $document = $this->document($creator, $origin, DocumentStatus::IN_REVIEW, subject: 'Revisión auxiliar');
-        $this->recipient($document, $destination, DocumentRecipientStatus::IN_REVIEW, handler: $assistant);
+        $head = $this->user(RoleName::CAREER_HEAD, $destination);
+        $recipient = $this->recipient($document, $destination, DocumentRecipientStatus::IN_REVIEW);
+        $recipient->reviewTasks()->create([
+            'assignment_key' => (string) Str::uuid(),
+            'assigned_to' => $assistant->id,
+            'assigned_by' => $head->id,
+            'instructions' => 'Revisar anexos.',
+        ]);
 
         $response = $this->actingAs($assistant)->get(route('dashboard'));
         $labels = collect($response->viewData('cards'))->pluck('label');
 
         $response->assertOk()->assertSee($document->subject)->assertDontSee('Puede aprobar, devolver o rechazar');
-        $this->assertTrue($labels->contains('Asignados a mí'));
+        $this->assertTrue($labels->contains('Mis tareas'));
         $this->assertFalse($labels->contains('Requieren decisión'));
-        $this->assertSame(1, $this->cardCount($response->viewData('cards'), 'Asignados a mí'));
+        $this->assertSame(1, $this->cardCount($response->viewData('cards'), 'Mis tareas'));
     }
 
     public function test_extra_sees_only_documents_with_an_effective_explicit_grant(): void
@@ -155,20 +172,23 @@ class DashboardTest extends TestCase
             ->assertDontSee($document->subject);
     }
 
-    public function test_pending_decision_and_review_counts_exclude_terminal_recipients(): void
+    public function test_pending_documents_exclude_terminal_recipients_and_prioritize_the_units_deadline(): void
     {
         $origin = $this->career('Ambiental', 'AMB');
         $destination = $this->career('Alimentos', 'ALI');
-        $secretary = $this->user(RoleName::SECRETARY, $destination);
+        $head = $this->user(RoleName::CAREER_HEAD, $destination);
         $creator = $this->user(RoleName::SECRETARY, $origin);
 
-        foreach ([
+        $secretary = $this->user(RoleName::SECRETARY, $destination);
+        $statuses = [
             DocumentRecipientStatus::SENT,
             DocumentRecipientStatus::RECEIVED,
             DocumentRecipientStatus::IN_REVIEW,
             DocumentRecipientStatus::APPROVED,
             DocumentRecipientStatus::REJECTED,
-        ] as $status) {
+        ];
+
+        foreach ($statuses as $status) {
             $general = match ($status) {
                 DocumentRecipientStatus::SENT => DocumentStatus::SENT,
                 DocumentRecipientStatus::RECEIVED => DocumentStatus::RECEIVED,
@@ -177,15 +197,21 @@ class DashboardTest extends TestCase
                 DocumentRecipientStatus::REJECTED => DocumentStatus::REJECTED,
                 default => DocumentStatus::SENT,
             };
-            $document = $this->document($creator, $origin, $general, subject: 'Estado '.$status->value);
+            // A different destination rejected the document while this unit is still waiting to receive it.
+            $document = $status === DocumentRecipientStatus::SENT
+                ? $this->document($creator, $origin, DocumentStatus::REJECTED, subject: 'Estado sent', dueAt: now()->subHour())
+                : $this->document($creator, $origin, $general, subject: 'Estado '.$status->value);
             $this->recipient($document, $destination, $status);
         }
 
-        $cards = $this->actingAs($secretary)->get(route('dashboard'))->viewData('cards');
+        $response = $this->actingAs($head)->get(route('dashboard'))->assertOk()->assertSee('Vencido desde el');
+        $items = $response->viewData('unitPending');
 
-        $this->assertSame(1, $this->cardCount($cards, 'Pendientes de recibir'));
-        $this->assertSame(1, $this->cardCount($cards, 'En revisión'));
-        $this->assertSame(2, $this->cardCount($cards, 'Requieren decisión'));
+        $this->assertSame(['Estado sent', 'Estado received', 'Estado in_review'], $items->pluck('document.subject')->all());
+        $this->assertSame(['Por recibir', 'Por asignar', 'Por decidir'], $items->pluck('step')->all());
+        $this->get(route('documents.index', ['work' => 'unit_pending']))->assertOk()
+            ->assertSee('Estado sent')->assertSee('Estado in_review')->assertDontSee('Estado approved')->assertDontSee('Estado rejected');
+        $this->actingAs($secretary)->get(route('documents.index', ['work' => 'unit_pending']))->assertOk()->assertDontSee('Estado sent');
     }
 
     public function test_overdue_and_due_soon_counts_reuse_deadline_rules(): void
@@ -296,6 +322,7 @@ class DashboardTest extends TestCase
     private function career(string $name, string $acronym): OrganizationalUnit
     {
         return OrganizationalUnit::query()->create([
+            'parent_id' => $this->faculty->id,
             'type' => 'career',
             'name' => $name.' '.Str::random(5),
             'acronym' => $acronym.Str::upper(Str::random(3)),
@@ -322,7 +349,7 @@ class DashboardTest extends TestCase
     ): Document {
         $official = $status !== DocumentStatus::DRAFT;
 
-        return Document::query()->create([
+        $document = new Document([
             'document_type_id' => DocumentType::query()->where('is_active', true)->firstOrFail()->id,
             'origin_unit_id' => $origin->id,
             'created_by' => $creator->id,
@@ -333,9 +360,11 @@ class DashboardTest extends TestCase
             'confidentiality' => $confidentiality,
             'due_at' => $dueAt,
             'code' => $official ? 'FTEC-'.$origin->acronym.'-2026-'.Str::upper(Str::random(8)) : null,
-            'sent_at' => $official ? now()->subDay() : null,
             'lock_version' => $official ? 1 : 0,
         ]);
+        $document->forceFill(['sent_at' => $official ? now()->subDay() : null])->save();
+
+        return $document;
     }
 
     private function recipient(
@@ -344,12 +373,17 @@ class DashboardTest extends TestCase
         DocumentRecipientStatus $status,
         ?User $handler = null,
     ): DocumentRecipient {
+        $decided = in_array($status, [DocumentRecipientStatus::APPROVED, DocumentRecipientStatus::REJECTED], true);
+
         return DocumentRecipient::query()->create([
             'document_id' => $document->id,
             'unit_id' => $unit->id,
             'requires_response' => true,
             'status' => $status,
             'current_handler_id' => $handler?->id,
+            'decided_by' => $decided ? $document->created_by : null,
+            'decided_at' => $decided ? now() : null,
+            'decision_reason' => $status === DocumentRecipientStatus::REJECTED ? 'Motivo de prueba.' : null,
             'lock_version' => 1,
         ]);
     }
@@ -369,7 +403,7 @@ class DashboardTest extends TestCase
 
     private function notification(User $user, bool $read): void
     {
-        DB::table('notifications')->insert([
+        DB::table('notificaciones')->insert([
             'id' => (string) Str::uuid(),
             'type' => 'test',
             'notifiable_type' => User::class,

@@ -19,6 +19,15 @@ class DocumentDeadlineService
             return DocumentDeadlineStatus::NOT_APPLICABLE;
         }
 
+        return $this->statusForPendingWork($document, $now);
+    }
+
+    public function statusForPendingWork(Document $document, ?CarbonInterface $now = null): DocumentDeadlineStatus
+    {
+        if ($document->due_at === null) {
+            return DocumentDeadlineStatus::NO_DUE_DATE;
+        }
+
         $current = $this->normalizeNow($now);
         $dueAt = CarbonImmutable::instance($document->due_at)->setTimezone($this->timezone());
 

@@ -6,6 +6,9 @@ use App\Enums\DocumentConfidentiality;
 use App\Enums\DocumentPriority;
 use App\Enums\DocumentRecipientStatus;
 use App\Enums\DocumentStatus;
+use App\Models\DocumentType;
+use App\Models\OrganizationalUnit;
+use App\Models\User;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -26,12 +29,12 @@ class SearchDocumentsRequest extends FormRequest
             'priority' => ['nullable', Rule::enum(DocumentPriority::class)],
             'confidentiality' => ['nullable', Rule::enum(DocumentConfidentiality::class)],
             'deadline' => ['nullable', Rule::in(['due_soon', 'overdue', 'has_due', 'no_due'])],
-            'document_type' => ['nullable', 'uuid', 'exists:document_types,public_id'],
-            'origin_unit' => ['nullable', 'uuid', 'exists:organizational_units,public_id'],
-            'recipient_unit' => ['nullable', 'uuid', 'exists:organizational_units,public_id'],
-            'recipient_user' => ['nullable', 'uuid', 'exists:users,public_id'],
-            'creator' => ['nullable', 'uuid', 'exists:users,public_id'],
-            'sender' => ['nullable', 'uuid', 'exists:users,public_id'],
+            'document_type' => ['nullable', 'uuid', Rule::exists(DocumentType::class, 'public_id')],
+            'origin_unit' => ['nullable', 'uuid', Rule::exists(OrganizationalUnit::class, 'public_id')],
+            'recipient_unit' => ['nullable', 'uuid', Rule::exists(OrganizationalUnit::class, 'public_id')],
+            'recipient_user' => ['nullable', 'uuid', Rule::exists(User::class, 'public_id')],
+            'creator' => ['nullable', 'uuid', Rule::exists(User::class, 'public_id')],
+            'sender' => ['nullable', 'uuid', Rule::exists(User::class, 'public_id')],
             'sent_from' => ['nullable', 'date_format:Y-m-d'],
             'sent_to' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:sent_from'],
             'due_from' => ['nullable', 'date_format:Y-m-d'],
@@ -44,7 +47,7 @@ class SearchDocumentsRequest extends FormRequest
             'direction' => ['nullable', Rule::in(['asc', 'desc'])],
             'work' => ['nullable', Rule::in([
                 'pending_receive', 'in_review', 'decision', 'collaboration',
-                'assigned', 'returned_correction', 'my_drafts', 'authorized',
+                'assigned', 'returned_correction', 'my_drafts', 'authorized', 'unit_pending',
             ])],
             'page' => ['nullable', 'integer', 'min:1'],
         ];

@@ -14,6 +14,8 @@ use LogicException;
 ])]
 class DocumentEvent extends Model
 {
+    protected $table = 'eventos_documentos';
+
     public $timestamps = false;
 
     public function document(): BelongsTo

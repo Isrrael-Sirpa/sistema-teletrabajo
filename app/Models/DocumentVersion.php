@@ -10,6 +10,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 #[Fillable(['document_id', 'version_number', 'uploaded_by', 'note'])]
 class DocumentVersion extends Model
 {
+    protected $table = 'versiones_documentos';
+
     public $timestamps = false;
 
     public function document(): BelongsTo

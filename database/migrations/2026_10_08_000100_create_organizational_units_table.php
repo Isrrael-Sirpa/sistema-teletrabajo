@@ -9,7 +9,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('organizational_units', function (Blueprint $table) {
+        Schema::create('unidades_organizacionales', function (Blueprint $table) {
             $table->id();
             $table->uuid('public_id')->unique();
             $table->string('type', 20);
@@ -22,16 +22,20 @@ return new class extends Migration
             $table->index(['type', 'is_active']);
         });
 
-        if (DB::getDriverName() === 'pgsql') {
-            DB::statement("ALTER TABLE organizational_units ADD CONSTRAINT units_type_check CHECK (type IN ('faculty', 'career', 'kardex'))");
-            DB::statement("CREATE UNIQUE INDEX units_singleton_type_unique ON organizational_units (type) WHERE type IN ('faculty', 'kardex')");
-            DB::statement('CREATE UNIQUE INDEX units_name_ci_unique ON organizational_units (LOWER(name))');
-            DB::statement('CREATE UNIQUE INDEX units_acronym_ci_unique ON organizational_units (LOWER(acronym))');
+        if (DB::getDriverName() === 'mysql') {
+            DB::statement("ALTER TABLE unidades_organizacionales ADD CONSTRAINT unidades_tipo_check CHECK (type IN ('faculty', 'career', 'kardex'))");
+            DB::statement("ALTER TABLE unidades_organizacionales ADD COLUMN singleton_type VARCHAR(20) GENERATED ALWAYS AS (CASE WHEN type IN ('faculty', 'kardex') THEN type ELSE NULL END) STORED");
+            DB::statement("ALTER TABLE unidades_organizacionales ADD CONSTRAINT unidades_singleton_tipo_unique UNIQUE (singleton_type)");
+        } elseif (DB::getDriverName() === 'pgsql') {
+            DB::statement("ALTER TABLE unidades_organizacionales ADD CONSTRAINT units_type_check CHECK (type IN ('faculty', 'career', 'kardex'))");
+            DB::statement("CREATE UNIQUE INDEX units_singleton_type_unique ON unidades_organizacionales (type) WHERE type IN ('faculty', 'kardex')");
+            DB::statement('CREATE UNIQUE INDEX units_name_ci_unique ON unidades_organizacionales (LOWER(name))');
+            DB::statement('CREATE UNIQUE INDEX units_acronym_ci_unique ON unidades_organizacionales (LOWER(acronym))');
         }
     }
 
     public function down(): void
     {
-        Schema::dropIfExists('organizational_units');
+        Schema::dropIfExists('unidades_organizacionales');
     }
 };

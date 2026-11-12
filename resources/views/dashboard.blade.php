@@ -1,13 +1,13 @@
 <x-layouts.authenticated :title="'Inicio — '.config('app.name')" :unread-notification-count="$unreadNotificationCount">
     <header class="ft-page-header">
         <div>
-            <p class="ft-eyebrow">Su espacio de trabajo</p>
+            @unless ($unitDashboard)<p class="ft-eyebrow">Su espacio de trabajo</p>@endunless
             <h1 class="ft-page-title">Buen día, {{ auth()->user()->name }}</h1>
-            <p class="ft-page-description">Revise lo que necesita atención y continúe desde donde lo dejó.</p>
+            @unless ($unitDashboard)<p class="ft-page-description">Revise lo que necesita atención y continúe desde donde lo dejó.</p>@endunless
             <p class="mt-3 inline-flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"><span class="font-semibold">{{ $roleLabel }}</span><span aria-hidden="true" class="text-slate-300">|</span><span>{{ $scopeLabel }}</span></p>
         </div>
         @can('create', App\Models\Document::class)
-            <a href="{{ route('documents.create') }}" class="ft-button-primary self-start sm:self-auto"><x-ui.icon name="plus" /> Nuevo documento</a>
+            <a href="{{ route('documents.create') }}" @class(['self-start sm:self-auto', 'ft-button-secondary' => $unitDashboard, 'ft-button-primary' => ! $unitDashboard])><x-ui.icon name="plus" /> Nuevo documento</a>
         @endcan
     </header>
 
@@ -24,6 +24,9 @@
         </section>
     @endif
 
+    @if ($unitDashboard)
+        @include('dashboard.unit')
+    @else
     <section class="mt-8" aria-labelledby="attention-title">
         <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
             <div><p class="ft-eyebrow">Por dónde empezar</p><h2 id="attention-title" class="mt-1 text-xl font-bold text-[var(--ft-primary)]">{{ $role === App\Enums\RoleName::EXTRA ? 'Documentos autorizados recientes' : 'Necesitan su atención' }}</h2></div>
@@ -81,5 +84,6 @@
 
     @if ($quickLinks)
         <section class="ft-card mt-9 p-5 sm:p-6" aria-labelledby="quick-links-title"><h2 id="quick-links-title" class="ft-form-section-title">Accesos rápidos</h2><p class="ft-field-help">Herramientas disponibles para su trabajo institucional.</p><nav class="mt-4 flex flex-wrap gap-3" aria-label="Accesos rápidos del panel">@foreach ($quickLinks as $link)<a href="{{ $link['url'] }}" class="ft-button-secondary">{{ $link['label'] }} <x-ui.icon name="arrow" class="h-4 w-4" /></a>@endforeach</nav></section>
+    @endif
     @endif
 </x-layouts.authenticated>

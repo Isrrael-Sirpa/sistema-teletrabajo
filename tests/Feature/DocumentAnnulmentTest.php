@@ -52,7 +52,7 @@ class DocumentAnnulmentTest extends TestCase
             InstitutionalStructureSeeder::class,
             DocumentTypeSeeder::class,
         ]);
-        Storage::fake('documents');
+        Storage::fake('documentos');
     }
 
     protected function tearDown(): void
@@ -94,7 +94,7 @@ class DocumentAnnulmentTest extends TestCase
         $this->assertSame($code, $document->code);
         $this->assertTrue($sentAt->equalTo($document->sent_at));
         $this->assertNull($document->deleted_at);
-        $this->assertDatabaseHas('document_events', [
+        $this->assertDatabaseHas('eventos_documentos', [
             'document_id' => $document->id,
             'event_type' => DocumentEventType::DOCUMENT_ANNULLED->value,
             'actor_id' => $actor->id,
@@ -102,7 +102,7 @@ class DocumentAnnulmentTest extends TestCase
             'to_status' => DocumentStatus::ANNULLED->value,
             'reason' => 'Emisión con error administrativo.',
         ]);
-        $this->assertDatabaseHas('audit_logs', [
+        $this->assertDatabaseHas('registros_auditoria', [
             'actor_id' => $actor->id,
             'action' => AuditAction::DOCUMENT_ANNULLED->value,
             'auditable_id' => $document->id,
@@ -147,7 +147,6 @@ class DocumentAnnulmentTest extends TestCase
             'reason' => 'Encargo temporal sin anulación.',
             'permissions' => [
                 PermissionName::DOCUMENTS_VIEW->value,
-                PermissionName::DOCUMENTS_APPROVE->value,
             ],
         ]);
         $this->annul($delegate, $document, 'La delegación no debe permitirlo.')->assertForbidden();
@@ -248,17 +247,17 @@ class DocumentAnnulmentTest extends TestCase
             'note' => 'Corrección preparada',
         ]);
         $path = $document->public_id.'/version-2/'.Str::uuid().'.pdf';
-        Storage::disk('documents')->put($path, '%PDF-1.4 historical');
+        Storage::disk('documentos')->put($path, '%PDF-1.4 historical');
         $file = DocumentFile::query()->create([
             'document_version_id' => $versionTwo->id,
-            'disk' => 'documents',
+            'disk' => 'documentos',
             'path' => $path,
             'original_name' => 'correccion.pdf',
             'stored_name' => basename($path),
             'extension' => 'pdf',
             'detected_mime_type' => 'application/pdf',
-            'size_bytes' => Storage::disk('documents')->size($path),
-            'sha256' => hash('sha256', Storage::disk('documents')->get($path)),
+            'size_bytes' => Storage::disk('documentos')->size($path),
+            'sha256' => hash('sha256', Storage::disk('documentos')->get($path)),
             'uploaded_by' => $creator->id,
         ]);
         DocumentEvent::query()->create([
@@ -283,11 +282,11 @@ class DocumentAnnulmentTest extends TestCase
         $this->assertSame(DocumentRecipientStatus::APPROVED, $approved->fresh()->status);
         $this->assertSame(DocumentRecipientStatus::RETURNED, $returned->fresh()->status);
         $this->assertSame(DocumentRecipientStatus::RECEIVED, $received->fresh()->status);
-        $this->assertDatabaseHas('document_versions', ['id' => $versionOne->id]);
-        $this->assertDatabaseHas('document_versions', ['id' => $versionTwo->id]);
-        $this->assertDatabaseHas('document_files', ['id' => $file->id]);
-        $this->assertTrue(Storage::disk('documents')->exists($path));
-        $this->assertDatabaseHas('document_events', ['id' => $historicalEvent->id]);
+        $this->assertDatabaseHas('versiones_documentos', ['id' => $versionOne->id]);
+        $this->assertDatabaseHas('versiones_documentos', ['id' => $versionTwo->id]);
+        $this->assertDatabaseHas('archivos_documentos', ['id' => $file->id]);
+        $this->assertTrue(Storage::disk('documentos')->exists($path));
+        $this->assertDatabaseHas('eventos_documentos', ['id' => $historicalEvent->id]);
         $this->assertNull($grant->fresh()->revoked_at);
         $this->actingAs($extra)->get(route('documents.show', $document))->assertOk()->assertSee('DOCUMENTO ANULADO');
         $this->actingAs($extra)->get(route('documents.files.download', [$document, $file]))->assertDownload('correccion.pdf');
@@ -344,11 +343,12 @@ class DocumentAnnulmentTest extends TestCase
             occurredAt: now()->toIso8601String(),
         ));
 
-        foreach ([$creator, $originHead, $destinationHead, $destinationSecretary] as $notified) {
+        foreach ([$creator, $originHead, $destinationHead] as $notified) {
             $notification = $notified->notifications()->sole();
             $this->assertSame('Documento anulado', $notification->data['title']);
             $this->assertSame(DocumentEventType::DOCUMENT_ANNULLED->value, $notification->data['event_type']);
         }
+        $this->assertSame(0, $destinationSecretary->notifications()->count());
         $this->assertSame(DocumentRecipientStatus::SENT, $recipient->fresh()->status);
     }
 
@@ -393,7 +393,8 @@ class DocumentAnnulmentTest extends TestCase
         $head = $this->user(RoleName::CAREER_HEAD, $career);
         $this->recipient($document, $career, DocumentRecipientStatus::SENT);
 
-        $this->actingAs($head)->get(route('dashboard'))->assertOk()->assertSee('Pendientes de recibir');
+        $this->actingAs($head)->get(route('dashboard'))->assertOk()
+            ->assertSee('Por recibir')->assertSee($document->subject);
         $this->annul($admin, $document, 'Cierre administrativo del trámite.')->assertRedirect();
 
         $this->assertSame(DocumentDeadlineStatus::NOT_APPLICABLE, app(DocumentDeadlineService::class)->status($document->fresh()));
@@ -403,6 +404,8 @@ class DocumentAnnulmentTest extends TestCase
         $this->assertSame(0, $cards->firstWhere('label', 'Documentos enviados pendientes')['count']);
         $this->assertSame(0, $cards->firstWhere('label', 'Vencidos')['count']);
         $this->assertSame(0, $cards->firstWhere('label', 'Próximos a vencer')['count']);
+        $this->actingAs($head)->get(route('dashboard'))->assertOk()
+            ->assertSee('No hay documentos pendientes para su unidad.')->assertDontSee($document->subject);
         $this->actingAs($head)->get(route('documents.index', ['work' => 'pending_receive']))
             ->assertOk()->assertDontSee($document->subject);
         $this->actingAs($admin)->get(route('documents.index', [

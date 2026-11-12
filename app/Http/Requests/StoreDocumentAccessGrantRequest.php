@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Enums\DocumentAccessPermission;
+use App\Models\User;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
@@ -18,7 +19,7 @@ class StoreDocumentAccessGrantRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'user_id' => ['required', 'integer', 'exists:users,id'],
+            'user_id' => ['required', 'integer', Rule::exists(User::class, 'id')],
             'permission' => ['required', Rule::enum(DocumentAccessPermission::class)],
             'ends_at' => ['nullable', 'date_format:Y-m-d\TH:i', 'after:now'],
         ];

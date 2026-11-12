@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Enums\AuditAction;
-use App\Enums\OrganizationalUnitType;
 use App\Enums\PermissionName;
 use App\Enums\RoleName;
 use App\Enums\UserStatus;
@@ -36,7 +35,7 @@ class UserManagementService
             $this->lockSensitiveScope($role, $unitId);
 
             if ($data['status'] === UserStatus::ACTIVE->value) {
-                $this->ensureActiveCareerHeadIsUnique($role, $unitId);
+                $this->ensureActiveResponsibleIsUnique($role, $unitId);
             }
 
             $user = User::query()->create([
@@ -105,7 +104,7 @@ class UserManagementService
             }
 
             if ($newStatus === UserStatus::ACTIVE) {
-                $this->ensureActiveCareerHeadIsUnique($newRole, $unitId, $lockedTarget);
+                $this->ensureActiveResponsibleIsUnique($newRole, $unitId, $lockedTarget);
             }
 
             $lockedTarget->update([
@@ -161,7 +160,7 @@ class UserManagementService
             }
 
             if ($active) {
-                $this->ensureActiveCareerHeadIsUnique($role, $lockedTarget->organizational_unit_id, $lockedTarget);
+                $this->ensureActiveResponsibleIsUnique($role, $lockedTarget->organizational_unit_id, $lockedTarget);
             }
 
             $oldStatus = $lockedTarget->status;
@@ -208,7 +207,7 @@ class UserManagementService
             ));
         }
 
-        if ($actor->hasRole(RoleName::CAREER_HEAD->value)) {
+        if ($actor->isResponsibleForUnit((int) $actor->organizational_unit_id)) {
             return array_values(array_filter(
                 RoleName::cases(),
                 fn (RoleName $role): bool => $role->isSecondary(),
@@ -239,15 +238,15 @@ class UserManagementService
 
         $unitId = filter_var($requestedUnitId, FILTER_VALIDATE_INT);
 
-        if ($actor->hasRole(RoleName::CAREER_HEAD->value)
+        if ($actor->isResponsibleForUnit((int) $actor->organizational_unit_id)
             && $unitId !== $actor->organizational_unit_id) {
             throw ValidationException::withMessages([
-                'organizational_unit_id' => 'Solo puede asignar usuarios a su propia carrera.',
+                'organizational_unit_id' => 'Solo puede asignar usuarios a su propia unidad.',
             ]);
         }
 
         if (! $actor->hasInstitutionalGlobalScope()
-            && ! $actor->hasRole(RoleName::CAREER_HEAD->value)
+            && ! $actor->isResponsibleForUnit((int) $actor->organizational_unit_id)
             && ! $this->delegations->can($actor, PermissionName::USERS_ASSIGN_ROLES, (int) $unitId)) {
             throw ValidationException::withMessages([
                 'organizational_unit_id' => 'Solo puede asignar usuarios dentro de la carrera delegada.',
@@ -256,13 +255,12 @@ class UserManagementService
 
         $unit = OrganizationalUnit::query()
             ->whereKey($unitId ?: 0)
-            ->where('type', OrganizationalUnitType::CAREER->value)
-            ->where('is_active', true)
+            ->availableAsDocumentDestination()
             ->first();
 
-        if (! $unit) {
+        if (! $unit || ($role->isUnitResponsible() && $unit->type->responsibleRole() !== $role)) {
             throw ValidationException::withMessages([
-                'organizational_unit_id' => 'Seleccione una carrera activa válida para este rol.',
+                'organizational_unit_id' => 'Seleccione una unidad activa válida para este rol.',
             ]);
         }
 
@@ -275,21 +273,21 @@ class UserManagementService
             $this->administrators->lockRole();
         }
 
-        if ($role === RoleName::CAREER_HEAD && $unitId !== null) {
+        if ($role->isUnitResponsible() && $unitId !== null) {
             OrganizationalUnit::query()->whereKey($unitId)->lockForUpdate()->firstOrFail();
         }
     }
 
-    private function ensureActiveCareerHeadIsUnique(RoleName $role, ?int $unitId, ?User $excluded = null): void
+    private function ensureActiveResponsibleIsUnique(RoleName $role, ?int $unitId, ?User $excluded = null): void
     {
-        if ($role !== RoleName::CAREER_HEAD || $unitId === null) {
+        if (! $role->isUnitResponsible() || $unitId === null) {
             return;
         }
 
         $query = User::query()
             ->where('organizational_unit_id', $unitId)
             ->where('status', UserStatus::ACTIVE->value)
-            ->role(RoleName::CAREER_HEAD->value);
+            ->role($role->value);
 
         if ($excluded) {
             $query->whereKeyNot($excluded->getKey());
@@ -297,7 +295,7 @@ class UserManagementService
 
         if ($query->exists()) {
             throw ValidationException::withMessages([
-                'role' => 'La carrera seleccionada ya tiene un Jefe de Carrera principal activo.',
+                'role' => 'La unidad ya tiene un responsable activo para el rol «'.$role->label().'».',
             ]);
         }
     }

@@ -44,7 +44,7 @@ class ProjectAcceptanceTest extends TestCase
             DocumentTypeSeeder::class,
         ]);
 
-        Storage::fake('documents');
+        Storage::fake('documentos');
     }
 
     protected function tearDown(): void
@@ -63,7 +63,7 @@ class ProjectAcceptanceTest extends TestCase
         $origin = $this->career('Carrera de Prueba Alfa', 'PTA');
         $destination = $this->career('Carrera de Prueba Beta', 'PTB');
         $users = $this->acceptanceUsers($origin);
-        $destinationSecretary = $this->user(RoleName::SECRETARY, $destination, 'Destino de Prueba');
+        $destinationHead = $this->user(RoleName::CAREER_HEAD, $destination, 'Destino de Prueba');
 
         $this->actingAs($users['secretary'])->post(route('documents.store'), [
             'document_type_id' => DocumentType::query()->where('code', 'informe')->sole()->id,
@@ -94,10 +94,10 @@ class ProjectAcceptanceTest extends TestCase
         $originalCode = $document->fresh()->code;
         $originalSentAt = $document->fresh()->sent_at;
 
-        $this->transition($destinationSecretary, $document, $recipient, 'receive');
-        $this->transition($destinationSecretary, $document, $recipient, 'start_review');
+        $this->transition($destinationHead, $document, $recipient, 'receive');
+        $this->transition($destinationHead, $document, $recipient, 'start_review');
         $this->transition(
-            $destinationSecretary,
+            $destinationHead,
             $document,
             $recipient,
             'return',
@@ -113,9 +113,9 @@ class ProjectAcceptanceTest extends TestCase
             'document_lock_version' => $document->fresh()->lock_version,
         ])->assertRedirect();
 
-        $this->transition($destinationSecretary, $document, $recipient, 'receive');
-        $this->transition($destinationSecretary, $document, $recipient, 'start_review');
-        $this->transition($destinationSecretary, $document, $recipient, 'approve');
+        $this->transition($destinationHead, $document, $recipient, 'receive');
+        $this->transition($destinationHead, $document, $recipient, 'start_review');
+        $this->transition($destinationHead, $document, $recipient, 'approve');
 
         $document->refresh();
         $recipient->refresh();
@@ -154,12 +154,12 @@ class ProjectAcceptanceTest extends TestCase
             $this->assertContains($eventType, $eventTypes);
         }
 
-        $this->assertDatabaseHas('audit_logs', [
+        $this->assertDatabaseHas('registros_auditoria', [
             'action' => AuditAction::DOCUMENT_SENT->value,
             'auditable_id' => (string) $document->id,
         ]);
-        $this->assertDatabaseHas('notifications', ['notifiable_id' => $destinationSecretary->id]);
-        $this->assertDatabaseHas('notifications', ['notifiable_id' => $users['secretary']->id]);
+        $this->assertDatabaseHas('notificaciones', ['notifiable_id' => $destinationHead->id]);
+        $this->assertDatabaseHas('notificaciones', ['notifiable_id' => $users['secretary']->id]);
         $this->assertCount(6, collect($users)->filter(fn (User $user): bool => $user->roles()->exists()));
     }
 
@@ -173,7 +173,7 @@ class ProjectAcceptanceTest extends TestCase
             'C' => ['unit' => $this->career('Carrera de Prueba C', 'PRC')],
         ])->map(fn (array $data, string $key): array => [
             ...$data,
-            'actor' => $this->user(RoleName::SECRETARY, $data['unit'], "Destino {$key}"),
+            'actor' => $this->user(RoleName::CAREER_HEAD, $data['unit'], "Destino {$key}"),
         ]);
 
         $document = $this->draft($creator, $origin, 'Aceptación multidestino');
@@ -250,7 +250,7 @@ class ProjectAcceptanceTest extends TestCase
         $this->assertSame($extension, $stored->extension);
         $this->assertSame("archivo.{$extension}", $stored->original_name);
         $this->assertNotSame('application/octet-stream', $stored->detected_mime_type);
-        Storage::disk('documents')->assertExists($stored->path);
+        Storage::disk('documentos')->assertExists($stored->path);
     }
 
     public function test_production_seeder_does_not_create_acceptance_users(): void
@@ -259,7 +259,7 @@ class ProjectAcceptanceTest extends TestCase
 
         $this->seed(DatabaseSeeder::class);
 
-        $this->assertDatabaseCount('users', 0);
+        $this->assertDatabaseCount('usuarios', 0);
     }
 
     /** @return array<string, array{string}> */
