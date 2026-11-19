@@ -21,6 +21,13 @@
     </div>
 
     <div>
+        <label for="correlative_label" class="block text-sm font-semibold text-slate-800">Abreviatura para el correlativo</label>
+        <input id="correlative_label" name="correlative_label" type="text" value="{{ old('correlative_label', $documentType?->correlative_label) }}" required maxlength="30" autocapitalize="characters" spellcheck="false" class="mt-2 block min-h-12 w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-base uppercase text-slate-950 shadow-sm focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20" aria-invalid="{{ $errors->has('correlative_label') ? 'true' : 'false' }}" @error('correlative_label') aria-describedby="correlative-label-error" @enderror>
+        <p class="ft-field-help">Ejemplos: NOTA, MEM., CIRC., INF. o RES. Se usa automáticamente al enviar.</p>
+        @error('correlative_label')<p id="correlative-label-error" class="ft-field-error">{{ $message }}</p>@enderror
+    </div>
+
+    <div>
         <label for="description" class="block text-sm font-semibold text-slate-800">Descripción <span class="font-normal text-slate-500">(opcional)</span></label>
         <textarea id="description" name="description" rows="5" maxlength="2000" class="mt-2 block w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-base text-slate-950 shadow-sm focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20" aria-invalid="{{ $errors->has('description') ? 'true' : 'false' }}" aria-describedby="description-help{{ $errors->has('description') ? ' description-error' : '' }}">{{ old('description', $documentType?->description) }}</textarea>
         <p id="description-help" class="ft-field-help">Explique brevemente cuándo corresponde utilizar este tipo. Máximo 2.000 caracteres.</p>

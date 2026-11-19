@@ -108,6 +108,7 @@ class DocumentTypeManagementTest extends TestCase
 
         $response = $this->actingAs($administrator)->post(route('document-types.store'), [
             'name' => '  Acta   Institucional  ',
+            'correlative_label' => 'ACTA',
             'description' => '  Documento   para registrar acuerdos.  ',
             'code' => 'codigo_manipulado',
             'is_active' => false,
@@ -130,6 +131,7 @@ class DocumentTypeManagementTest extends TestCase
 
         $this->actingAs($administrator)->put(route('document-types.update', $type), [
             'name' => 'Carta institucional',
+            'correlative_label' => $type->correlative_label,
             'description' => 'Descripción actualizada.',
             'code' => 'otro_codigo',
             'is_active' => false,

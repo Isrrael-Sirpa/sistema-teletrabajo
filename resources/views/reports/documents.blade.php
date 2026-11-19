@@ -6,6 +6,7 @@
                 <h1 class="ft-page-title">Reportes documentales</h1>
                 <p class="ft-page-description">Consulte, filtre y exporte información documental autorizada.</p>
             </div>
+            <a href="{{ route('correspondence-book.index') }}" class="ft-button-secondary">Libro de correspondencia</a>
         </header>
 
         @if ($errors->has('export'))

@@ -41,7 +41,7 @@
 <x-layouts.authenticated :title="$document->subject" :career-unit="$document->originUnit->type === App\Enums\OrganizationalUnitType::CAREER ? $document->originUnit : null">
     <div class="ft-page-header">
         <div>
-            <p class="ft-section-heading">{{ $document->code ?? 'Borrador sin código' }}</p>
+            <p class="ft-section-heading">{{ $document->code ?? ($correlativePreview ?? 'Cite pendiente de configuración') }}</p>
             <h1 class="ft-page-title max-w-4xl">{{ $document->subject }}</h1>
             <div class="mt-3 flex flex-wrap gap-2">
                 <x-ui.status-badge :status="$document->general_status" />
@@ -239,7 +239,7 @@
             <h2 id="document-data-title" class="text-lg font-bold text-slate-950">Datos del documento</h2>
     @endunless
         <dl class="mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            <div><dt class="text-xs font-bold uppercase tracking-wide text-slate-500">Código oficial</dt><dd class="mt-1 text-sm font-semibold text-slate-900">{{ $document->code ?? 'Se asignará al enviar' }}</dd></div>
+            <div><dt class="text-xs font-bold uppercase tracking-wide text-slate-500">Cite</dt><dd class="mt-1 text-sm font-semibold text-slate-900">{{ $document->code ?? ($correlativePreview ?? 'Pendiente de configuración') }}</dd>@if ($isDraft && $correlativePreview)<p class="mt-1 text-xs text-slate-500">El número se asignará automáticamente al enviar.</p>@endif</div>
             <div><dt class="text-xs font-bold uppercase tracking-wide text-slate-500">Tipo documental</dt><dd class="mt-1 text-sm text-slate-900">{{ $document->documentType->name }}</dd></div>
             <div><dt class="text-xs font-bold uppercase tracking-wide text-slate-500">Unidad de origen</dt><dd class="mt-1 text-sm text-slate-900">{{ $document->originUnit->name }}</dd></div>
             <div><dt class="text-xs font-bold uppercase tracking-wide text-slate-500">Creado por</dt><dd class="mt-1 text-sm text-slate-900">{{ $document->creator->name }}</dd></div>
@@ -781,12 +781,65 @@
         @endif
     @endif
 
+    @if ($isDraft && $document->authorization_status !== App\Enums\OutgoingAuthorizationStatus::NOT_REQUIRED)
+        <section class="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-5 sm:p-7" aria-labelledby="authorization-title">
+            <h2 id="authorization-title" class="text-lg font-bold text-amber-950">Autorización de salida</h2>
+            <p class="mt-2 text-sm text-amber-900">Estado: <strong>{{ $document->authorization_status->label() }}</strong></p>
+
+            @if ($document->authorization_note)
+                <div class="mt-4 rounded-xl bg-white p-4 text-sm text-slate-800">
+                    <p class="font-bold">Observación de la autoridad</p>
+                    <p class="mt-1 whitespace-pre-line">{{ $document->authorization_note }}</p>
+                </div>
+            @endif
+
+            @can('requestAuthorization', $document)
+                <form method="POST" action="{{ route('documents.authorization.request', $document) }}" class="mt-4">
+                    @csrf
+                    <input type="hidden" name="document_lock_version" value="{{ $document->lock_version }}">
+                    <button type="submit" @disabled($document->recipients->isEmpty()) class="ft-button-primary">Solicitar autorización</button>
+                    @if ($document->recipients->isEmpty())
+                        <p class="mt-2 text-xs font-semibold text-red-700">Agregue al menos un destinatario antes de solicitar autorización.</p>
+                    @endif
+                </form>
+            @endcan
+
+            @can('decideAuthorization', $document)
+                <div class="mt-4 grid gap-4 lg:grid-cols-2">
+                    <form method="POST" action="{{ route('documents.authorization.decide', [$document, 'approve']) }}" class="rounded-xl bg-white p-4">
+                        @csrf
+                        @method('PATCH')
+                        <input type="hidden" name="document_lock_version" value="{{ $document->lock_version }}">
+                        <label for="approval_note" class="block text-sm font-bold text-slate-800">Observación opcional</label>
+                        <textarea id="approval_note" name="authorization_note" rows="3" maxlength="2000" class="mt-2 block w-full rounded-lg border-slate-300 text-sm"></textarea>
+                        <button type="submit" class="ft-button-primary mt-3">Autorizar envío</button>
+                    </form>
+                    <form method="POST" action="{{ route('documents.authorization.decide', [$document, 'return']) }}" class="rounded-xl bg-white p-4">
+                        @csrf
+                        @method('PATCH')
+                        <input type="hidden" name="document_lock_version" value="{{ $document->lock_version }}">
+                        <label for="return_note" class="block text-sm font-bold text-slate-800">Corrección requerida</label>
+                        <textarea id="return_note" name="authorization_note" rows="3" required maxlength="2000" class="mt-2 block w-full rounded-lg border-slate-300 text-sm"></textarea>
+                        <button type="submit" class="ft-button-secondary mt-3">Devolver a Secretaría</button>
+                    </form>
+                </div>
+            @endcan
+
+            @if ($document->authorization_status === App\Enums\OutgoingAuthorizationStatus::PENDING)
+                <p class="mt-4 text-sm text-amber-900">La Secretaria no puede modificar ni enviar el borrador mientras espera la decisión.</p>
+            @elseif ($document->authorization_status === App\Enums\OutgoingAuthorizationStatus::APPROVED)
+                <p class="mt-4 text-sm text-emerald-800">Autorizado por {{ $document->authorizer?->name ?? 'la autoridad' }}. Ya puede realizarse el envío oficial.</p>
+            @endif
+        </section>
+    @endif
+
     @can('send', $document)
         <section class="mt-6 rounded-2xl border border-blue-200 bg-blue-50 p-5 sm:p-7" aria-labelledby="send-title">
             <h2 id="send-title" class="text-lg font-bold text-blue-950">Listo para enviar</h2>
-            <p class="mt-2 text-sm leading-6 text-blue-900">Revise el resumen antes de enviar. Esta acción asignará el código institucional y volverá inmutables los destinatarios y archivos de esta entrega.</p>
+            <p class="mt-2 text-sm leading-6 text-blue-900">Revise el resumen antes de enviar. El sistema asignará el número correlativo y volverá inmutables los destinatarios y archivos de esta entrega.</p>
             <dl data-recipient-send-summary class="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
                 <div><dt class="font-bold text-blue-950">Origen</dt><dd class="text-blue-900">{{ $document->originUnit->name }}</dd></div>
+                <div><dt class="font-bold text-blue-950">Cite previsto</dt><dd class="text-blue-900">{{ $correlativePreview ?? 'Pendiente de configuración' }}</dd></div>
                 <div><dt class="font-bold text-blue-950">Tipo</dt><dd class="text-blue-900">{{ $document->documentType->name }}</dd></div>
                 <div><dt class="font-bold text-blue-950">Asunto</dt><dd class="text-blue-900">{{ $document->subject }}</dd></div>
                 <div><dt class="font-bold text-blue-950">Destinatarios principales</dt><dd class="text-blue-900">{{ $mainRecipients->map(fn ($recipient) => $recipient->user?->name ?? $recipient->unit->name)->join(', ') ?: 'Ninguno' }}</dd></div>

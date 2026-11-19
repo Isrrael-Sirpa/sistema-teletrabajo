@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['name', 'code', 'description', 'is_active', 'created_by'])]
+#[Fillable(['name', 'code', 'correlative_label', 'description', 'is_active', 'created_by'])]
 class DocumentType extends Model
 {
     use HasUuids;

@@ -22,6 +22,7 @@ class StoreDocumentTypeRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:120'],
+            'correlative_label' => ['required', 'string', 'max:30'],
             'description' => ['nullable', 'string', 'max:2000'],
         ];
     }
@@ -46,6 +47,8 @@ class StoreDocumentTypeRequest extends FormRequest
         return [
             'name.required' => 'Ingrese el nombre del tipo documental.',
             'name.max' => 'El nombre no puede superar los 120 caracteres.',
+            'correlative_label.required' => 'Ingrese la abreviatura que se mostrará en el correlativo.',
+            'correlative_label.max' => 'La abreviatura no puede superar los 30 caracteres.',
             'description.max' => 'La descripción no puede superar los 2000 caracteres.',
         ];
     }
@@ -56,6 +59,7 @@ class StoreDocumentTypeRequest extends FormRequest
 
         $this->merge([
             'name' => Str::squish((string) $this->input('name')),
+            'correlative_label' => Str::upper(Str::squish((string) $this->input('correlative_label'))),
             'description' => filled($description) ? Str::squish((string) $description) : null,
         ]);
     }

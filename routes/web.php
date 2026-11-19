@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\AuditLogController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
+use App\Http\Controllers\CorrelativeControlController;
+use App\Http\Controllers\CorrespondenceBookController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DocumentAccessGrantController;
 use App\Http\Controllers\DocumentController;
@@ -29,6 +31,16 @@ Route::middleware(['auth', 'active.user'])->group(function (): void {
     Route::get('/administracion/auditoria', [AuditLogController::class, 'index'])
         ->middleware('permission:audit.view')
         ->name('audit.index');
+
+    Route::get('/libro-correspondencia', [CorrespondenceBookController::class, 'index'])
+        ->middleware('permission:reports.view_global|reports.view_unit')
+        ->name('correspondence-book.index');
+    Route::get('/libro-correspondencia/pdf', [CorrespondenceBookController::class, 'pdf'])
+        ->middleware(['permission:reports.view_global|reports.view_unit', 'throttle:10,1'])
+        ->name('correspondence-book.pdf');
+
+    Route::get('/control-correlativos', [CorrelativeControlController::class, 'index'])
+        ->name('correlatives.index');
 
     Route::prefix('reportes')->name('reports.')->middleware('permission_or_delegation:reports.view_unit')->group(function (): void {
         Route::get('/documentos', [DocumentReportController::class, 'index'])->name('documents.index');
@@ -115,6 +127,11 @@ Route::middleware(['auth', 'active.user'])->group(function (): void {
         Route::post('/{document}/enviar', [DocumentWorkflowController::class, 'send'])
             ->middleware('permission_or_delegation:documents.send')
             ->name('send');
+        Route::post('/{document}/autorizacion/solicitar', [DocumentWorkflowController::class, 'requestAuthorization'])
+            ->name('authorization.request');
+        Route::patch('/{document}/autorizacion/{decision}', [DocumentWorkflowController::class, 'decideAuthorization'])
+            ->whereIn('decision', ['approve', 'return'])
+            ->name('authorization.decide');
         Route::post('/{document}/correccion/enviar', [DocumentWorkflowController::class, 'sendCorrection'])
             ->middleware('permission_or_delegation:documents.send')
             ->name('correction.send');

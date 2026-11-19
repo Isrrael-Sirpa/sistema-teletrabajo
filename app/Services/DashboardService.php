@@ -281,7 +281,7 @@ class DashboardService
         $this->workQueries->attention($query, $user);
 
         if ($role === RoleName::EXTRA) {
-            $query->latest('documents.updated_at');
+            $query->latest('documentos.updated_at');
         } else {
             $this->orderByAttention($query, $now);
         }
@@ -327,7 +327,7 @@ class DashboardService
                 ...$deadlineStatuses,
                 DocumentPriority::IMPORTANT->value,
             ],
-        )->orderBy('documents.created_at')->orderBy('documents.id');
+        )->orderBy('documentos.created_at')->orderBy('documentos.id');
     }
 
     /** @return array<int, array{label: string, url: string}> */

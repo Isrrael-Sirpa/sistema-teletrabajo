@@ -14,6 +14,8 @@
         request()->routeIs('units.*') => ['Carreras y unidades', route('units.index')],
         request()->routeIs('document-types.*') => ['Tipos documentales', route('document-types.index')],
         request()->routeIs('delegations.*') => ['Delegaciones', route('delegations.index')],
+        request()->routeIs('correspondence-book.*') => ['Reportes', route('reports.documents.index')],
+        request()->routeIs('correlatives.*') => ['Control de correlativos', route('correlatives.index')],
         request()->routeIs('reports.*') => ['Reportes', route('reports.documents.index')],
         request()->routeIs('audit.*') => ['Auditoría', route('audit.index')],
         request()->routeIs('notifications.*') => ['Notificaciones', route('notifications.index')],
@@ -51,6 +53,9 @@
                     @can('create', App\Models\Document::class)
                         <x-ui.nav-link :href="route('documents.create')" icon="plus" :active="request()->routeIs('documents.create')">Nuevo documento</x-ui.nav-link>
                     @endcan
+                    @if($role === App\Enums\RoleName::SECRETARY)
+                        <x-ui.nav-link :href="route('correlatives.index')" icon="list" :active="request()->routeIs('correlatives.*')">Control de correlativos</x-ui.nav-link>
+                    @endif
                 @else
                     <p class="ft-nav-label">AVISOS</p>
                 @endcan
@@ -66,7 +71,7 @@
 
                 @if($viewer->canAny(['reports.view_global', 'reports.view_unit']) || $viewer->can('audit.view'))
                     <p class="ft-nav-label">ANÁLISIS</p>
-                    @canany(['reports.view_global', 'reports.view_unit'])<x-ui.nav-link :href="route('reports.documents.index')" icon="chart" :active="request()->routeIs('reports.*')">Reportes</x-ui.nav-link>@endcanany
+                    @canany(['reports.view_global', 'reports.view_unit'])<x-ui.nav-link :href="route('reports.documents.index')" icon="chart" :active="request()->routeIs('reports.*') || request()->routeIs('correspondence-book.*')">Reportes</x-ui.nav-link>@endcanany
                     @can('audit.view')<x-ui.nav-link :href="route('audit.index')" icon="shield" :active="request()->routeIs('audit.*')">Auditoría</x-ui.nav-link>@endcan
                 @endif
             </nav>

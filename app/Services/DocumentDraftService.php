@@ -6,6 +6,8 @@ use App\Enums\DocumentConfidentiality;
 use App\Enums\DocumentEventType;
 use App\Enums\DocumentPriority;
 use App\Enums\DocumentStatus;
+use App\Enums\OutgoingAuthorizationStatus;
+use App\Enums\RoleName;
 use App\Models\Document;
 use App\Models\DocumentType;
 use App\Models\OrganizationalUnit;
@@ -36,6 +38,9 @@ class DocumentDraftService
                 'subject' => $data['subject'],
                 'description' => $data['description'] ?? null,
                 'general_status' => DocumentStatus::DRAFT,
+                'authorization_status' => $actor->hasRole(RoleName::SECRETARY->value)
+                    ? OutgoingAuthorizationStatus::NOT_REQUESTED
+                    : OutgoingAuthorizationStatus::NOT_REQUIRED,
                 'priority' => DocumentPriority::from($data['priority']),
                 'confidentiality' => DocumentConfidentiality::from($data['confidentiality']),
                 'due_at' => $this->dueAt($data['due_at'] ?? null),
@@ -92,6 +97,14 @@ class DocumentDraftService
                     'priority' => $data['priority'],
                     'confidentiality' => $data['confidentiality'],
                     'due_at' => $this->dueAt($data['due_at'] ?? null),
+                    'authorization_status' => $actor->hasRole(RoleName::SECRETARY->value)
+                        ? OutgoingAuthorizationStatus::NOT_REQUESTED->value
+                        : $document->authorization_status->value,
+                    'authorization_requested_by' => null,
+                    'authorization_requested_at' => null,
+                    'authorized_by' => null,
+                    'authorized_at' => null,
+                    'authorization_note' => null,
                     'lock_version' => DB::raw('lock_version + 1'),
                     'updated_at' => now(),
                 ]);
@@ -145,7 +158,7 @@ class DocumentDraftService
                 ]);
             }
 
-            foreach (['document_recipients', 'document_versions', 'document_observations', 'document_access_grants'] as $table) {
+            foreach (['destinatarios_documentos', 'versiones_documentos', 'observaciones_documentos', 'concesiones_acceso_documentos'] as $table) {
                 if (DB::table($table)->where('document_id', $locked->getKey())->exists()) {
                     throw ValidationException::withMessages([
                         'document' => 'El borrador tiene información relacionada y no puede descartarse físicamente.',

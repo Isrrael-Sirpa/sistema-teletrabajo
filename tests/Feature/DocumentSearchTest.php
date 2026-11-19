@@ -185,11 +185,11 @@ class DocumentSearchTest extends TestCase
         $important->forceFill(['created_at' => now()->subDay()])->save();
 
         $response = $this->actingAs($admin)->get(route('documents.index', ['sort' => 'priority', 'direction' => 'asc']));
-        $this->assertSame([$normal->id, $important->id, $urgent->id], $response->viewData('documentos')->pluck('id')->all());
+        $this->assertSame([$normal->id, $important->id, $urgent->id], $response->viewData('documents')->pluck('id')->all());
         $oldest = $this->actingAs($admin)->get(route('documents.index', ['sort' => 'created_at', 'direction' => 'asc']));
         $newest = $this->actingAs($admin)->get(route('documents.index', ['sort' => 'created_at', 'direction' => 'desc']));
-        $this->assertSame([$normal->id, $important->id, $urgent->id], $oldest->viewData('documentos')->pluck('id')->all());
-        $this->assertSame([$urgent->id, $important->id, $normal->id], $newest->viewData('documentos')->pluck('id')->all());
+        $this->assertSame([$normal->id, $important->id, $urgent->id], $oldest->viewData('documents')->pluck('id')->all());
+        $this->assertSame([$urgent->id, $important->id, $normal->id], $newest->viewData('documents')->pluck('id')->all());
 
         $this->actingAs($admin)->get(route('documents.index', ['sort' => 'subject; DROP TABLE users', 'direction' => 'sideways']))
             ->assertRedirect()->assertSessionHasErrors(['sort', 'direction']);
@@ -203,7 +203,7 @@ class DocumentSearchTest extends TestCase
         }
 
         $response = $this->actingAs($admin)->get(route('documents.index', ['q' => 'Informe seriado', 'page' => 1]));
-        $paginator = $response->viewData('documentos');
+        $paginator = $response->viewData('documents');
 
         $response->assertOk()->assertSee('17 documentos encontrados')->assertSee('Limpiar filtros');
         $this->assertStringContainsString('q=Informe%20seriado', (string) $paginator->nextPageUrl());
@@ -331,7 +331,7 @@ class DocumentSearchTest extends TestCase
         $response = $this->actingAs($head)->get(route('documents.index', ['q' => 'ultrasecreta']));
         $response->assertOk()->assertSee($visible->subject)->assertDontSee($invisible->subject)->assertDontSee($deleted->subject)
             ->assertSee('1 documento encontrado');
-        $this->assertSame(1, $response->viewData('documentos')->total());
+        $this->assertSame(1, $response->viewData('documents')->total());
     }
 
     public function test_rejects_invalid_uuid_enum_boolean_dates_ranges_and_version(): void
@@ -482,10 +482,10 @@ class DocumentSearchTest extends TestCase
     {
         $response = $this->actingAs($user)->get(route('documents.index', $filters));
         $response->assertOk();
-        $actual = $response->viewData('documentos')->pluck('id')->sort()->values()->all();
+        $actual = $response->viewData('documents')->pluck('id')->sort()->values()->all();
         $ids = collect($expected)->pluck('id')->sort()->values()->all();
         $this->assertSame($ids, $actual);
-        $this->assertSame(count($ids), $response->viewData('documentos')->total());
+        $this->assertSame(count($ids), $response->viewData('documents')->total());
     }
 
     /** @param array<string, mixed> $filters */

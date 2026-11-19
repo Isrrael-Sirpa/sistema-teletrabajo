@@ -207,6 +207,7 @@ class AuditLogTest extends TestCase
     public function test_private_download_is_audited_without_storage_paths_or_restricted_content(): void
     {
         Storage::fake('documentos');
+        config(['documents.disk' => 'documentos']);
         $document = $this->document($this->admin, DocumentConfidentiality::RESTRICTED, 'ASUNTO-MUY-SECRETO');
         $file = $this->file($document, $this->admin, 'ruta/interna/secreta.pdf', 'nombre-secreto.pdf');
         Storage::disk('documentos')->put($file->path, 'contenido');

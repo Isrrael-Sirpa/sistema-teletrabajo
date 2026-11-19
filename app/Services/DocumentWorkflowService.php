@@ -8,6 +8,7 @@ use App\Enums\DocumentRecipientStatus;
 use App\Enums\DocumentStatus;
 use App\Enums\DocumentTransition;
 use App\Enums\OrganizationalUnitType;
+use App\Enums\OutgoingAuthorizationStatus;
 use App\Events\DocumentNotificationRequested;
 use App\Models\Document;
 use App\Models\DocumentCounter;
@@ -65,7 +66,7 @@ class DocumentWorkflowService
             );
 
             $sentAt = now();
-            $number = $this->nextNumber($locked->origin_unit_id, $sentAt->year);
+            $number = $this->nextNumber($locked->origin_unit_id, $locked->document_type_id, $sentAt->year);
             $code = $this->formatCode($locked, $sentAt->year, $number);
 
             DocumentRecipient::query()
@@ -115,6 +116,100 @@ class DocumentWorkflowService
                 DocumentEventType::DOCUMENT_SENT,
                 $recipients->modelKeys(),
                 occurredAt: $sentAt->toIso8601String(),
+            );
+
+            return $locked->refresh();
+        });
+    }
+
+    public function previewCode(Document $document): ?string
+    {
+        return $this->formatCode($document, now()->year, null, strict: false);
+    }
+
+    public function requestAuthorization(User $actor, Document $document, int $expectedVersion): Document
+    {
+        Gate::forUser($actor)->authorize('requestAuthorization', $document);
+
+        return DB::transaction(function () use ($actor, $document, $expectedVersion): Document {
+            $locked = Document::query()->with(['documentType', 'originUnit'])->lockForUpdate()->findOrFail($document->getKey());
+            Gate::forUser($actor)->authorize('requestAuthorization', $locked);
+            $this->assertDocumentVersion($locked, $expectedVersion);
+            $this->validateForSending($locked);
+
+            if (! $locked->recipients()->exists()) {
+                throw ValidationException::withMessages(['recipients' => 'Agregue al menos un destinatario antes de solicitar autorización.']);
+            }
+
+            $now = now();
+            $locked->forceFill([
+                'authorization_status' => OutgoingAuthorizationStatus::PENDING,
+                'authorization_requested_by' => $actor->getKey(),
+                'authorization_requested_at' => $now,
+                'authorized_by' => null,
+                'authorized_at' => null,
+                'authorization_note' => null,
+                'lock_version' => $locked->lock_version + 1,
+            ])->save();
+
+            $this->events->record($locked, DocumentEventType::AUTHORIZATION_REQUESTED, $actor, occurredAt: $now);
+            $this->audit->record($actor, AuditAction::DOCUMENT_AUTHORIZATION_REQUESTED, $locked, newValues: [
+                'document_public_id' => $locked->public_id,
+                'origin_unit_id' => $locked->origin_unit_id,
+            ]);
+            DocumentNotificationRequested::dispatch(
+                $locked->getKey(),
+                $actor->getKey(),
+                DocumentEventType::AUTHORIZATION_REQUESTED,
+                occurredAt: $now->toIso8601String(),
+            );
+
+            return $locked->refresh();
+        });
+    }
+
+    public function decideAuthorization(
+        User $actor,
+        Document $document,
+        int $expectedVersion,
+        bool $approve,
+        ?string $note = null,
+    ): Document {
+        Gate::forUser($actor)->authorize('decideAuthorization', $document);
+
+        return DB::transaction(function () use ($actor, $document, $expectedVersion, $approve, $note): Document {
+            $locked = Document::query()->lockForUpdate()->findOrFail($document->getKey());
+            Gate::forUser($actor)->authorize('decideAuthorization', $locked);
+            $this->assertDocumentVersion($locked, $expectedVersion);
+            $cleanNote = filled($note) ? trim((string) $note) : null;
+
+            if (! $approve && $cleanNote === null) {
+                throw ValidationException::withMessages(['authorization_note' => 'Indique qué debe corregir la Secretaria.']);
+            }
+
+            $status = $approve ? OutgoingAuthorizationStatus::APPROVED : OutgoingAuthorizationStatus::RETURNED;
+            $event = $approve ? DocumentEventType::AUTHORIZATION_APPROVED : DocumentEventType::AUTHORIZATION_RETURNED;
+            $audit = $approve ? AuditAction::DOCUMENT_AUTHORIZATION_APPROVED : AuditAction::DOCUMENT_AUTHORIZATION_RETURNED;
+            $now = now();
+            $locked->forceFill([
+                'authorization_status' => $status,
+                'authorized_by' => $actor->getKey(),
+                'authorized_at' => $now,
+                'authorization_note' => $cleanNote,
+                'lock_version' => $locked->lock_version + 1,
+            ])->save();
+
+            $this->events->record($locked, $event, $actor, reason: $cleanNote, occurredAt: $now);
+            $this->audit->record($actor, $audit, $locked, newValues: [
+                'document_public_id' => $locked->public_id,
+                'authorization_status' => $status,
+            ]);
+            DocumentNotificationRequested::dispatch(
+                $locked->getKey(),
+                $actor->getKey(),
+                $event,
+                reason: $cleanNote,
+                occurredAt: $now->toIso8601String(),
             );
 
             return $locked->refresh();
@@ -441,10 +536,11 @@ class DocumentWorkflowService
         }
     }
 
-    private function nextNumber(int $originUnitId, int $year): int
+    private function nextNumber(int $originUnitId, int $documentTypeId, int $year): int
     {
         DocumentCounter::query()->insertOrIgnore([
-            'origin_unit_id' => $originUnitId,
+            'origin_unit_id' => null,
+            'document_type_id' => $documentTypeId,
             'year' => $year,
             'last_number' => 0,
             'created_at' => now(),
@@ -452,7 +548,7 @@ class DocumentWorkflowService
         ]);
 
         $counter = DocumentCounter::query()
-            ->where('origin_unit_id', $originUnitId)
+            ->where('document_type_id', $documentTypeId)
             ->where('year', $year)
             ->lockForUpdate()
             ->sole();
@@ -463,30 +559,33 @@ class DocumentWorkflowService
         return $counter->last_number;
     }
 
-    private function formatCode(Document $document, int $year, int $number): string
+    private function formatCode(Document $document, int $year, ?int $number, bool $strict = true): ?string
     {
         $origin = $document->originUnit;
-        $faculty = $origin->type === OrganizationalUnitType::FACULTY
-            ? $origin
-            : $origin->parent;
+        $prefix = filled($origin->correlative_prefix)
+            ? trim($origin->correlative_prefix)
+            : ($origin->type === OrganizationalUnitType::CAREER ? 'FT C.'.Str::upper($origin->acronym).'.' : null);
+        $label = filled($document->documentType->correlative_label)
+            ? trim($document->documentType->correlative_label)
+            : Str::upper($document->documentType->code);
 
-        if (! $faculty || $faculty->type !== OrganizationalUnitType::FACULTY || ! $faculty->is_active) {
+        if ($prefix === null || $label === '') {
+            if (! $strict) {
+                return null;
+            }
+
             throw ValidationException::withMessages([
-                'origin_unit_id' => 'La unidad de origen no pertenece a una Facultad activa.',
+                'origin_unit_id' => 'La unidad de origen o el tipo documental no tiene configurada su serie institucional.',
             ]);
         }
 
-        $segments = [Str::upper($faculty->acronym)];
+        $digits = max(1, min(12, (int) config('documents.workflow.code_digits', 3)));
 
-        if ($origin->getKey() !== $faculty->getKey()) {
-            $segments[] = Str::upper($origin->acronym);
-        }
+        $sequence = $number === null
+            ? 'pendiente'
+            : str_pad((string) $number, $digits, '0', STR_PAD_LEFT);
 
-        $digits = max(1, min(12, (int) config('documents.workflow.code_digits', 6)));
-        $segments[] = (string) $year;
-        $segments[] = str_pad((string) $number, $digits, '0', STR_PAD_LEFT);
-
-        return implode('-', $segments);
+        return $prefix.' '.$label.' N° '.$sequence.'/'.$year;
     }
 
     private function assertDocumentVersion(Document $document, int $expectedVersion): void

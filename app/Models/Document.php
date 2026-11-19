@@ -6,6 +6,7 @@ use App\Enums\DocumentConfidentiality;
 use App\Enums\DocumentPriority;
 use App\Enums\DocumentRecipientStatus;
 use App\Enums\DocumentStatus;
+use App\Enums\OutgoingAuthorizationStatus;
 use App\Enums\PermissionName;
 use App\Enums\RoleName;
 use App\Services\DelegatedAuthorizationService;
@@ -22,6 +23,8 @@ use Illuminate\Database\Eloquent\SoftDeletes;
     'document_type_id', 'origin_unit_id', 'created_by', 'sender_user_id',
     'subject', 'description', 'general_status', 'priority', 'confidentiality',
     'due_at', 'code', 'lock_version',
+    'authorization_status', 'authorization_requested_by', 'authorization_requested_at',
+    'authorized_by', 'authorized_at', 'authorization_note',
 ])]
 class Document extends Model
 {
@@ -63,6 +66,16 @@ class Document extends Model
     public function annuller(): BelongsTo
     {
         return $this->belongsTo(User::class, 'annulled_by');
+    }
+
+    public function authorizationRequester(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'authorization_requested_by');
+    }
+
+    public function authorizer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'authorized_by');
     }
 
     public function recipients(): HasMany
@@ -199,11 +212,14 @@ class Document extends Model
     {
         return [
             'general_status' => DocumentStatus::class,
+            'authorization_status' => OutgoingAuthorizationStatus::class,
             'priority' => DocumentPriority::class,
             'confidentiality' => DocumentConfidentiality::class,
             'due_at' => 'datetime',
             'sent_at' => 'datetime',
             'annulled_at' => 'datetime',
+            'authorization_requested_at' => 'datetime',
+            'authorized_at' => 'datetime',
             'lock_version' => 'integer',
         ];
     }

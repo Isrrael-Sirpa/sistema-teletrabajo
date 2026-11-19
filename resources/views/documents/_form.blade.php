@@ -31,7 +31,7 @@
             <select id="document_type_id" name="document_type_id" required class="mt-2 block min-h-11 w-full" aria-describedby="document-type-help @error('document_type_id') document-type-error @enderror" @error('document_type_id') aria-invalid="true" @enderror>
                 <option value="">Seleccione una opción</option>
                 @foreach ($documentTypes as $documentType)
-                    <option value="{{ $documentType->id }}" @selected((string) old('document_type_id', $document->document_type_id ?? '') === (string) $documentType->id)>{{ $documentType->name }}</option>
+                    <option value="{{ $documentType->id }}" @selected((string) old('document_type_id', $document->document_type_id ?? $selectedDocumentTypeId ?? '') === (string) $documentType->id)>{{ $documentType->name }}</option>
                 @endforeach
             </select>
             <p id="document-type-help" class="ft-field-help">Solo se muestran tipos documentales activos.</p>

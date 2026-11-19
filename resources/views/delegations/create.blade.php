@@ -69,18 +69,33 @@
             </label>
             <p id="delegation-reason-help" class="ft-field-help">Explique por qué se necesita la sustitución. Máximo 2.000 caracteres.</p>
             </section>
-            <fieldset class="ft-card ft-form-section">
-                <legend class="ft-form-section-title">3. Funciones autorizadas</legend>
-                <p class="ft-field-help">Seleccione solo las funciones necesarias durante la sustitución.</p>
-                <div class="mt-4 grid gap-3 sm:grid-cols-2">
-                    @foreach($capabilities as $capability)
-                        <label class="flex min-h-14 cursor-pointer items-start gap-3 rounded-xl border border-slate-200 p-4 text-sm hover:bg-slate-50">
-                            <input type="checkbox" name="permissions[]" value="{{ $capability->value }}" @checked(in_array($capability->value, old('permissions', []), true)) class="mt-1 rounded border-slate-300">
-                            <span>{{ $capability->label() }}</span>
-                        </label>
+            @php
+                $selectedPermissions = old('permissions', []);
+            @endphp
+            <section class="ft-card p-5 sm:p-7" aria-labelledby="delegation-capabilities-title">
+                <h2 id="delegation-capabilities-title" class="ft-form-section-title">3. Funciones autorizadas</h2>
+                <p class="mt-2 ft-field-help">Abra un módulo para seleccionar sus funciones. Al abrir otro, el anterior se cierra; las selecciones se conservan.</p>
+                <div class="mt-5 space-y-3">
+                    @foreach($capabilityGroups as $group => $capabilities)
+                        <details name="delegation-capability-group" class="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                            <summary class="flex min-h-14 list-none items-center justify-between gap-4 px-4 py-3 text-sm font-bold text-slate-900 hover:bg-slate-50">
+                                <span>{{ $group }}</span>
+                                <span class="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">{{ count($capabilities) }} funciones</span>
+                            </summary>
+                            <div class="border-t border-slate-200 bg-slate-50 p-4">
+                                <div class="grid gap-2 sm:grid-cols-2">
+                                    @foreach($capabilities as $capability)
+                                        <label class="flex min-w-0 cursor-pointer items-start gap-3 rounded-lg bg-white p-3 text-sm leading-5 text-slate-800 ring-1 ring-slate-200 hover:bg-blue-50 hover:ring-blue-300">
+                                            <input type="checkbox" name="permissions[]" value="{{ $capability->value }}" @checked(in_array($capability->value, $selectedPermissions, true)) class="mt-1 shrink-0 rounded border-slate-300">
+                                            <span class="min-w-0 break-words">{{ $capability->label() }}</span>
+                                        </label>
+                                    @endforeach
+                                </div>
+                            </div>
+                        </details>
                     @endforeach
                 </div>
-            </fieldset>
+            </section>
             <div class="ft-form-actions">
                 <p class="text-sm text-slate-600">Revise responsables, fechas y funciones antes de registrar.</p>
                 <div class="flex flex-wrap gap-3">

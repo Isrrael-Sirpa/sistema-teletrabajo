@@ -29,7 +29,7 @@ class ProductionSecurityTest extends TestCase
             'security.hsts.include_subdomains' => false,
         ]);
 
-        $this->get('/')->assertHeaderMissing('Strict-Transport-Security');
+        $this->get('http://localhost/')->assertHeaderMissing('Strict-Transport-Security');
         $this->get('https://localhost/')
             ->assertHeader('Strict-Transport-Security', 'max-age=31536000');
     }

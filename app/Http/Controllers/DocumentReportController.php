@@ -195,7 +195,7 @@ class DocumentReportController extends Controller
     /** @param Builder<Document> $query */
     private function count(Builder $query): int
     {
-        return (int) (clone $query)->setEagerLoads([])->reorder()->count('documents.id');
+        return (int) (clone $query)->setEagerLoads([])->reorder()->count('documentos.id');
     }
 
     private function maxRows(): int

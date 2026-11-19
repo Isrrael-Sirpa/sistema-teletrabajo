@@ -297,7 +297,7 @@ class DocumentDraftManagementTest extends TestCase
 
         $this->actingAs($administrator)->get(route('documents.index'))
             ->assertOk()
-            ->assertViewHas('documentos', fn (LengthAwarePaginator $documents): bool => $documents->perPage() === 15 && $documents->count() === 15);
+            ->assertViewHas('documents', fn (LengthAwarePaginator $documents): bool => $documents->perPage() === 15 && $documents->count() === 15);
 
         $this->assertTrue(Route::has('documents.send'));
     }

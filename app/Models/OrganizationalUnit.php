@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['parent_id', 'type', 'name', 'acronym', 'description', 'is_active'])]
+#[Fillable(['parent_id', 'type', 'name', 'acronym', 'correlative_prefix', 'description', 'is_active'])]
 class OrganizationalUnit extends Model
 {
     use HasFactory, HasUuids;

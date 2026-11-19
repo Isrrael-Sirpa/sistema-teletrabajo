@@ -29,6 +29,9 @@ enum AuditAction: string
     case DOCUMENT_TYPE_DEACTIVATED = 'document_types.deactivated';
 
     case DOCUMENT_SENT = 'documents.sent';
+    case DOCUMENT_AUTHORIZATION_REQUESTED = 'documents.authorization_requested';
+    case DOCUMENT_AUTHORIZATION_APPROVED = 'documents.authorization_approved';
+    case DOCUMENT_AUTHORIZATION_RETURNED = 'documents.authorization_returned';
     case DOCUMENT_ANNULLED = 'documents.annulled';
     case REVIEW_TASK_ASSIGNED = 'review_tasks.assigned';
     case REVIEW_TASK_SUBMITTED = 'review_tasks.submitted';
@@ -77,6 +80,9 @@ enum AuditAction: string
             self::DOCUMENT_TYPE_ACTIVATED => 'Tipo documental activado',
             self::DOCUMENT_TYPE_DEACTIVATED => 'Tipo documental desactivado',
             self::DOCUMENT_SENT => 'Documento enviado oficialmente',
+            self::DOCUMENT_AUTHORIZATION_REQUESTED => 'Autorización de salida solicitada',
+            self::DOCUMENT_AUTHORIZATION_APPROVED => 'Salida documental autorizada',
+            self::DOCUMENT_AUTHORIZATION_RETURNED => 'Autorización devuelta para corrección',
             self::DOCUMENT_ANNULLED => 'Documento anulado',
             self::REVIEW_TASK_ASSIGNED => 'Revisión interna asignada',
             self::REVIEW_TASK_SUBMITTED => 'Revisión interna entregada',

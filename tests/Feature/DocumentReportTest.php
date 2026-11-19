@@ -54,7 +54,7 @@ class DocumentReportTest extends TestCase
         foreach ([RoleName::ADMINISTRATOR, RoleName::CO_ADMINISTRATOR] as $role) {
             $response = $this->actingAs($this->user($role))->get(route('reports.documents.index'));
             $response->assertOk()->assertSee($first->subject)->assertSee($second->subject)->assertSee('Reportes');
-            $this->assertSame(2, $response->viewData('documentos')->total());
+            $this->assertSame(2, $response->viewData('documents')->total());
         }
     }
 
@@ -142,7 +142,7 @@ class DocumentReportTest extends TestCase
         ]));
 
         $response->assertOk()->assertDontSee($secret->subject)->assertSee('0 documentos');
-        $this->assertSame(0, $response->viewData('documentos')->total());
+        $this->assertSame(0, $response->viewData('documents')->total());
         $this->assertSame(0, collect($response->viewData('summaries')['statuses'])->sum('count'));
     }
 
@@ -216,7 +216,7 @@ class DocumentReportTest extends TestCase
         }
 
         $response = $this->actingAs($admin)->get(route('reports.documents.index', ['priority' => 'important']));
-        $documents = $response->viewData('documentos');
+        $documents = $response->viewData('documents');
         $response->assertOk()->assertSee('7 documentos');
         $this->assertSame(5, $documents->count());
         $this->assertStringContainsString('priority=important', (string) $documents->nextPageUrl());
@@ -323,7 +323,7 @@ class DocumentReportTest extends TestCase
         $this->assertSame(route('reports.documents.csv', absolute: false), parse_url($url, PHP_URL_PATH));
         parse_str(parse_url($url, PHP_URL_QUERY), $exportFilters);
         $this->assertEquals($filters, $exportFilters);
-        $this->assertSame([$document->id], $response->viewData('documentos')->pluck('id')->all());
+        $this->assertSame([$document->id], $response->viewData('documents')->pluck('id')->all());
     }
 
     public function test_report_summary_uses_all_filtered_documents_not_only_the_current_page(): void
@@ -338,7 +338,7 @@ class DocumentReportTest extends TestCase
 
         $response = $this->actingAs($admin)->get(route('reports.documents.index'));
         $response->assertOk();
-        $this->assertCount(5, $response->viewData('documentos'));
+        $this->assertCount(5, $response->viewData('documents'));
         preg_match('/<section aria-labelledby="report-summary-title">(.*?)<\/section>/s', $response->getContent(), $summary);
         preg_match_all('/<dd[^>]*>(.*?)<\/dd>/s', $summary[1], $values);
         $this->assertSame(['9 documentos', '7', '1', '1'], array_map(
@@ -391,6 +391,69 @@ class DocumentReportTest extends TestCase
         $many = $this->queryCount($admin);
 
         $this->assertLessThanOrEqual($one + 1, $many);
+    }
+
+    public function test_correspondence_book_shows_only_the_secretarys_unit_entries_and_exits(): void
+    {
+        $own = $this->career('Mecánica Automotriz', 'MAZ');
+        $foreign = $this->career('Aeronáutica', 'AER');
+        $hiddenUnit = $this->career('Química Industrial', 'QMC');
+        $secretary = $this->user(RoleName::SECRETARY, $own);
+        $foreignSecretary = $this->user(RoleName::SECRETARY, $foreign);
+        $hiddenSecretary = $this->user(RoleName::SECRETARY, $hiddenUnit);
+
+        $outgoing = $this->document($secretary, $own, 'Salida del libro');
+        $this->recipient($outgoing, $foreign, DocumentRecipientStatus::SENT);
+        $incoming = $this->document($foreignSecretary, $foreign, 'Entrada del libro');
+        $this->recipient($incoming, $own, DocumentRecipientStatus::RECEIVED, $secretary, now());
+        $hidden = $this->document($hiddenSecretary, $hiddenUnit, 'Correspondencia ajena');
+        $this->recipient($hidden, $foreign, DocumentRecipientStatus::SENT);
+
+        $response = $this->actingAs($secretary)->get(route('correspondence-book.index'));
+
+        $response->assertOk()
+            ->assertSee($outgoing->code)
+            ->assertSee($incoming->code)
+            ->assertSee($secretary->name)
+            ->assertDontSee($hidden->code);
+        $this->assertSame(2, $response->viewData('entries')->total());
+    }
+
+    public function test_correspondence_book_filters_by_month_and_rejects_assistants(): void
+    {
+        $own = $this->career('Electricidad Industrial', 'ELT');
+        $foreign = $this->career('Electromecánica', 'ELM');
+        $secretary = $this->user(RoleName::SECRETARY, $own);
+        $foreignSecretary = $this->user(RoleName::SECRETARY, $foreign);
+        $assistant = $this->user(RoleName::SECRETARY_ASSISTANT, $own);
+
+        $outgoing = $this->document($secretary, $own, 'Solo salida');
+        $this->recipient($outgoing, $foreign, DocumentRecipientStatus::SENT);
+        $incoming = $this->document($foreignSecretary, $foreign, 'Solo entrada');
+        $this->recipient($incoming, $own, DocumentRecipientStatus::SENT);
+        $incoming->forceFill(['sent_at' => now()->subMonth()])->save();
+
+        $response = $this->actingAs($secretary)->get(route('correspondence-book.index', [
+            'year' => now()->year,
+            'month' => now()->month,
+        ]));
+
+        $response->assertOk()->assertSee($outgoing->code)->assertDontSee($incoming->code);
+        $this->assertSame(1, $response->viewData('entries')->total());
+        $this->actingAs($assistant)->get(route('correspondence-book.index'))->assertForbidden();
+    }
+
+    public function test_correspondence_book_can_be_downloaded_as_pdf_with_the_same_scope(): void
+    {
+        $unit = $this->career('Mecánica Industrial', 'MIN');
+        $secretary = $this->user(RoleName::SECRETARY, $unit);
+        $document = $this->document($secretary, $unit, 'Registro PDF');
+        $this->recipient($document, $unit, DocumentRecipientStatus::SENT);
+
+        $response = $this->actingAs($secretary)->get(route('correspondence-book.pdf', ['year' => now()->year]));
+
+        $response->assertOk()->assertHeader('content-type', 'application/pdf');
+        $this->assertStringStartsWith('%PDF-', $response->getContent());
     }
 
     /** @return array{User, OrganizationalUnit, User} */
@@ -477,10 +540,10 @@ class DocumentReportTest extends TestCase
         $documents = $expected ?? $filtersOrExpected;
         $response = $this->actingAs($user)->get(route('reports.documents.index', $filters));
         $response->assertOk();
-        $actual = $response->viewData('documentos')->pluck('id')->sort()->values()->all();
+        $actual = $response->viewData('documents')->pluck('id')->sort()->values()->all();
         $ids = collect($documents)->pluck('id')->sort()->values()->all();
         $this->assertSame($ids, $actual);
-        $this->assertSame(count($ids), $response->viewData('documentos')->total());
+        $this->assertSame(count($ids), $response->viewData('documents')->total());
     }
 
     /** @return array<int, array<int, string|null>> */

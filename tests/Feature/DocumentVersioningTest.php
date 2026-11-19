@@ -51,6 +51,7 @@ class DocumentVersioningTest extends TestCase
         ]);
 
         Storage::fake('documentos');
+        config(['documents.disk' => 'documentos']);
     }
 
     protected function tearDown(): void

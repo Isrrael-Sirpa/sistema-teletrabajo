@@ -90,4 +90,29 @@ class DocumentNotificationRecipientResolver
             ->unique(fn (User $user): int => $user->getKey())
             ->values();
     }
+
+    /** @return Collection<int, User> */
+    public function forAuthorizationResponsibles(Document $document, int $actorId): Collection
+    {
+        return User::query()
+            ->documentResponsibles()
+            ->where('organizational_unit_id', $document->origin_unit_id)
+            ->whereKeyNot($actorId)
+            ->get();
+    }
+
+    /** @return Collection<int, User> */
+    public function forAuthorizationRequester(Document $document, int $actorId): Collection
+    {
+        if ($document->authorization_requested_by === null) {
+            return collect();
+        }
+
+        return User::query()
+            ->whereKey($document->authorization_requested_by)
+            ->where('status', UserStatus::ACTIVE->value)
+            ->where('organizational_unit_id', $document->origin_unit_id)
+            ->whereKeyNot($actorId)
+            ->get();
+    }
 }

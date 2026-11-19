@@ -45,6 +45,7 @@ class ProjectAcceptanceTest extends TestCase
         ]);
 
         Storage::fake('documentos');
+        config(['documents.disk' => 'documentos']);
     }
 
     protected function tearDown(): void
@@ -89,6 +90,13 @@ class ProjectAcceptanceTest extends TestCase
             'files' => [$this->file('pdf', 'informe-original.pdf')],
             'lock_version' => $document->fresh()->lock_version,
         ])->assertRedirect();
+
+        $this->actingAs($users['secretary'])->post(route('documents.authorization.request', $document), [
+            'document_lock_version' => $document->fresh()->lock_version,
+        ])->assertRedirect()->assertSessionHasNoErrors();
+        $this->actingAs($users['head'])->patch(route('documents.authorization.decide', [$document, 'approve']), [
+            'document_lock_version' => $document->fresh()->lock_version,
+        ])->assertRedirect()->assertSessionHasNoErrors();
 
         $this->send($users['secretary'], $document);
         $originalCode = $document->fresh()->code;
@@ -389,16 +397,10 @@ class ProjectAcceptanceTest extends TestCase
             file_put_contents($path, file_get_contents($zipPath));
             unlink($zipPath);
         } elseif (in_array($extension, ['jpg', 'png'], true)) {
-            $image = imagecreatetruecolor(2, 2);
-            $this->assertNotFalse($image);
-
-            if ($extension === 'jpg') {
-                imagejpeg($image, $path);
-            } else {
-                imagepng($image, $path);
-            }
-
-            imagedestroy($image);
+            $encoded = $extension === 'png'
+                ? 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+                : '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAX/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAEf/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABBQJ//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPwF//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPwF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQAGPwJ//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPyF//9oADAMBAAIAAwAAABCf/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPxB//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPxB//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxB//9k=';
+            file_put_contents($path, base64_decode($encoded, true));
         }
 
         return new UploadedFile($path, $name, null, null, true);

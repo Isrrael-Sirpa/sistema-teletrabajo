@@ -29,6 +29,9 @@ class SendDocumentLifecycleNotifications
             DocumentEventType::DOCUMENT_REJECTED,
             DocumentEventType::DOCUMENT_ANNULLED,
             DocumentEventType::CORRECTION_SENT,
+            DocumentEventType::AUTHORIZATION_REQUESTED,
+            DocumentEventType::AUTHORIZATION_APPROVED,
+            DocumentEventType::AUTHORIZATION_RETURNED,
         ], true)) {
             return;
         }
@@ -41,7 +44,14 @@ class SendDocumentLifecycleNotifications
 
         $occurredAt = $event->occurredAt ?? now()->toIso8601String();
 
-        if ($event->eventType === DocumentEventType::DOCUMENT_ANNULLED) {
+        if ($event->eventType === DocumentEventType::AUTHORIZATION_REQUESTED) {
+            $users = $this->recipients->forAuthorizationResponsibles($document, $event->actorId);
+        } elseif (in_array($event->eventType, [
+            DocumentEventType::AUTHORIZATION_APPROVED,
+            DocumentEventType::AUTHORIZATION_RETURNED,
+        ], true)) {
+            $users = $this->recipients->forAuthorizationRequester($document, $event->actorId);
+        } elseif ($event->eventType === DocumentEventType::DOCUMENT_ANNULLED) {
             $users = $this->recipients->forAnnulment($document, $event->actorId);
         } elseif (in_array($event->eventType, [
             DocumentEventType::DOCUMENT_SENT,

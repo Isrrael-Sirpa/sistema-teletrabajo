@@ -7,6 +7,7 @@ use App\Enums\DocumentPriority;
 use App\Enums\DocumentRecipientStatus;
 use App\Enums\DocumentStatus;
 use App\Enums\DocumentTransition;
+use App\Enums\OutgoingAuthorizationStatus;
 use App\Enums\PermissionName;
 use App\Enums\RoleName;
 use App\Models\Document;
@@ -16,6 +17,7 @@ use App\Models\DocumentType;
 use App\Models\OrganizationalUnit;
 use App\Models\User;
 use App\Services\DocumentWorkflowService;
+use Carbon\CarbonImmutable;
 use Database\Seeders\AuthorizationSeeder;
 use Database\Seeders\DocumentTypeSeeder;
 use Database\Seeders\InstitutionalStructureSeeder;
@@ -42,6 +44,7 @@ class DocumentWorkflowTest extends TestCase
         ]);
 
         Storage::fake('documentos');
+        config(['documents.disk' => 'documentos']);
     }
 
     public function test_draft_with_recipient_can_be_sent_without_file_and_gets_official_fields(): void
@@ -54,7 +57,7 @@ class DocumentWorkflowTest extends TestCase
         $document->refresh();
         $recipient->refresh();
 
-        $this->assertMatchesRegularExpression('/^FTEC-'.$origin->acronym.'-'.now()->year.'-000001$/', $document->code);
+        $this->assertSame('FT C.'.strtoupper($origin->acronym).'. INF. N° 001/'.now()->year, $document->code);
         $this->assertSame(DocumentStatus::SENT, $document->general_status);
         $this->assertSame($creator->id, $document->sender_user_id);
         $this->assertNotNull($document->sent_at);
@@ -78,24 +81,25 @@ class DocumentWorkflowTest extends TestCase
         $this->recipient($historical, $origin);
         $this->send($creator, $historical)->assertRedirect();
         $oldCode = $historical->fresh()->code;
-        $oldAcronym = $origin->acronym;
+        $oldPrefix = $origin->correlative_prefix;
 
         $administrator = $this->userWithRole(RoleName::ADMINISTRATOR);
         $this->actingAs($administrator)->put(route('units.update', $origin), [
             'name' => $origin->name,
             'acronym' => 'NUEVA-SIGLA',
+            'correlative_prefix' => 'FT C.NUEVA.',
             'description' => null,
         ])->assertRedirect(route('units.show', $origin));
 
         $this->assertSame($oldCode, $historical->fresh()->code);
-        $this->assertStringContainsString('-'.$oldAcronym.'-', $oldCode);
+        $this->assertStringContainsString((string) $oldPrefix, $oldCode);
 
         $future = $this->draft($creator, $origin->fresh());
         $this->recipient($future, $origin);
         $this->send($creator, $future)->assertRedirect();
 
         $this->assertSame($oldCode, $historical->fresh()->code);
-        $this->assertMatchesRegularExpression('/^FTEC-NUEVA-SIGLA-'.now()->year.'-000002$/', $future->fresh()->code);
+        $this->assertSame('FT C.NUEVA. INF. N° 002/'.now()->year, $future->fresh()->code);
     }
 
     public function test_draft_without_recipient_cannot_be_sent_or_consume_counter(): void
@@ -124,10 +128,166 @@ class DocumentWorkflowTest extends TestCase
         $this->send($creator, $second)->assertRedirect();
 
         $this->assertNotSame($first->fresh()->code, $second->fresh()->code);
-        $this->assertStringEndsWith('-000001', $first->fresh()->code);
-        $this->assertStringEndsWith('-000002', $second->fresh()->code);
+        $this->assertStringEndsWith('N° 001/'.now()->year, $first->fresh()->code);
+        $this->assertStringEndsWith('N° 002/'.now()->year, $second->fresh()->code);
         $this->assertNull($unusedDraft->fresh()->code);
         $this->assertSame(2, DocumentCounter::query()->sole()->last_number);
+    }
+
+    public function test_each_document_type_uses_its_own_annual_series(): void
+    {
+        [$note, $origin, $creator] = $this->draftContext();
+        $memorandum = $this->draft($creator, $origin, 'memorandum');
+        $this->recipient($note, $origin);
+        $this->recipient($memorandum, $origin);
+
+        $this->send($creator, $note)->assertRedirect();
+        $this->send($creator, $memorandum)->assertRedirect();
+
+        $this->assertStringEndsWith('INF. N° 001/'.now()->year, $note->fresh()->code);
+        $this->assertStringEndsWith('MEM. N° 001/'.now()->year, $memorandum->fresh()->code);
+        $this->assertSame(2, DocumentCounter::query()->count());
+    }
+
+    public function test_same_document_type_shares_one_annual_series_between_careers(): void
+    {
+        [$first, $firstUnit, $firstSecretary] = $this->draftContext();
+        $secondUnit = $this->career();
+        $secondSecretary = $this->userWithRole(RoleName::SECRETARY, $secondUnit);
+        $second = $this->draft($secondSecretary, $secondUnit);
+        $this->recipient($first, $firstUnit);
+        $this->recipient($second, $secondUnit);
+
+        $this->send($firstSecretary, $first)->assertRedirect();
+        $this->send($secondSecretary, $second)->assertRedirect();
+
+        $this->assertStringEndsWith('N° 001/'.now()->year, $first->fresh()->code);
+        $this->assertStringEndsWith('N° 002/'.now()->year, $second->fresh()->code);
+        $this->assertSame(1, DocumentCounter::query()->count());
+        $this->assertSame(2, DocumentCounter::query()->sole()->last_number);
+        $this->assertNull(DocumentCounter::query()->sole()->origin_unit_id);
+    }
+
+    public function test_each_new_year_restarts_the_shared_series_at_one(): void
+    {
+        $this->travelTo(CarbonImmutable::create(2026, 12, 31, 10));
+        [$first, $origin, $secretary] = $this->draftContext();
+        $this->recipient($first, $origin);
+        $this->send($secretary, $first)->assertRedirect();
+
+        $this->travelTo(CarbonImmutable::create(2027, 1, 1, 10));
+        $second = $this->draft($secretary, $origin);
+        $this->recipient($second, $origin);
+        $this->send($secretary, $second)->assertRedirect();
+
+        $this->assertStringEndsWith('N° 001/2026', $first->fresh()->code);
+        $this->assertStringEndsWith('N° 001/2027', $second->fresh()->code);
+        $this->assertSame([2026, 2027], DocumentCounter::query()->orderBy('year')->pluck('year')->all());
+    }
+
+    public function test_kardex_has_its_own_configured_institutional_series(): void
+    {
+        $kardex = OrganizationalUnit::query()->where('type', 'kardex')->sole();
+        $creator = $this->userWithRole(RoleName::KARDEX_HEAD, $kardex);
+        $document = $this->draft($creator, $kardex, 'documento_kardex');
+        $this->recipient($document, $kardex);
+
+        $this->send($creator, $document)->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->assertSame('FT KARDEX. KARDEX N° 001/'.now()->year, $document->fresh()->code);
+    }
+
+    public function test_secretary_correlative_control_uses_the_official_series_without_leaking_other_drafts(): void
+    {
+        [$ownDocument, $origin, $secretary] = $this->draftContext();
+        $otherSecretary = $this->userWithRole(RoleName::SECRETARY, $origin);
+        $otherDocument = $this->draft($otherSecretary, $origin);
+        $this->recipient($ownDocument, $origin);
+        $this->recipient($otherDocument, $origin);
+        $this->send($secretary, $ownDocument)->assertRedirect();
+        $this->send($otherSecretary, $otherDocument)->assertRedirect();
+        $type = $ownDocument->documentType;
+
+        $response = $this->actingAs($secretary)->get(route('correlatives.index', [
+            'document_type' => $type->public_id,
+            'year' => now()->year,
+        ]));
+
+        $response->assertOk()
+            ->assertSee('Control de correlativos')
+            ->assertSee('001')
+            ->assertSee('002')
+            ->assertSee('003')
+            ->assertSee(route('documents.show', $ownDocument), false)
+            ->assertDontSee(route('documents.show', $otherDocument), false)
+            ->assertSee(route('documents.create', ['document_type' => $type->public_id]), false);
+        $this->assertSame(2, $response->viewData('lastNumber'));
+        $this->assertSame(3, $response->viewData('nextNumber'));
+
+        $assistant = $this->userWithRole(RoleName::SECRETARY_ASSISTANT, $origin);
+        $head = $this->userWithRole(RoleName::CAREER_HEAD, $origin);
+        $this->actingAs($assistant)->get(route('correlatives.index'))->assertForbidden();
+        $this->actingAs($head)->get(route('correlatives.index'))->assertForbidden();
+    }
+
+    public function test_secretary_requires_same_unit_authority_before_official_send(): void
+    {
+        [$document, $origin, $secretary] = $this->draftContext();
+        $document->update(['authorization_status' => OutgoingAuthorizationStatus::NOT_REQUESTED]);
+        $this->recipient($document, $origin);
+        $head = $this->userWithRole(RoleName::CAREER_HEAD, $origin);
+        $otherHead = $this->userWithRole(RoleName::CAREER_HEAD, $this->career());
+
+        $this->send($secretary, $document)->assertForbidden();
+        $this->actingAs($secretary)->post(route('documents.authorization.request', $document), [
+            'document_lock_version' => 0,
+        ])->assertRedirect();
+        $this->assertSame(OutgoingAuthorizationStatus::PENDING, $document->fresh()->authorization_status);
+        $this->assertDatabaseCount('contadores_documentos', 0);
+        $requestNotification = $head->notifications()->sole();
+        $this->assertSame('authorization_requested', $requestNotification->data['event_type']);
+        $this->assertStringContainsString('solicita su autorización', $requestNotification->data['message']);
+
+        $this->actingAs($otherHead)->patch(route('documents.authorization.decide', [$document, 'approve']), [
+            'document_lock_version' => 1,
+        ])->assertForbidden();
+        $this->actingAs($head)->patch(route('documents.authorization.decide', [$document, 'approve']), [
+            'document_lock_version' => 1,
+        ])->assertRedirect();
+
+        $this->assertSame(OutgoingAuthorizationStatus::APPROVED, $document->fresh()->authorization_status);
+        $approvalNotification = $secretary->notifications()->sole();
+        $this->assertSame('authorization_approved', $approvalNotification->data['event_type']);
+        $this->assertStringContainsString('ya puede enviarse', $approvalNotification->data['message']);
+        $this->send($secretary, $document)->assertRedirect();
+        $this->assertSame(1, DocumentCounter::query()->sole()->last_number);
+    }
+
+    public function test_returned_authorization_requires_note_and_does_not_consume_number(): void
+    {
+        [$document, $origin, $secretary] = $this->draftContext();
+        $document->update(['authorization_status' => OutgoingAuthorizationStatus::NOT_REQUESTED]);
+        $this->recipient($document, $origin);
+        $head = $this->userWithRole(RoleName::CAREER_HEAD, $origin);
+        $this->actingAs($secretary)->post(route('documents.authorization.request', $document), [
+            'document_lock_version' => 0,
+        ]);
+
+        $this->actingAs($head)->patch(route('documents.authorization.decide', [$document, 'return']), [
+            'document_lock_version' => 1,
+        ])->assertSessionHasErrors('authorization_note');
+        $this->actingAs($head)->patch(route('documents.authorization.decide', [$document, 'return']), [
+            'document_lock_version' => 1,
+            'authorization_note' => 'Corregir el destinatario y la referencia.',
+        ])->assertRedirect();
+
+        $document->refresh();
+        $this->assertSame(OutgoingAuthorizationStatus::RETURNED, $document->authorization_status);
+        $this->assertSame('Corregir el destinatario y la referencia.', $document->authorization_note);
+        $returnNotification = $secretary->notifications()->sole();
+        $this->assertSame('authorization_returned', $returnNotification->data['event_type']);
+        $this->assertSame('Corregir el destinatario y la referencia.', $returnNotification->data['reason']);
+        $this->assertDatabaseCount('contadores_documentos', 0);
     }
 
     public function test_unauthorized_user_cannot_send_and_sent_document_cannot_be_sent_twice(): void
@@ -726,10 +886,10 @@ class DocumentWorkflowTest extends TestCase
         return [$this->draft($creator, $origin), $origin, $creator];
     }
 
-    private function draft(User $creator, OrganizationalUnit $origin): Document
+    private function draft(User $creator, OrganizationalUnit $origin, string $typeCode = 'informe'): Document
     {
         return Document::query()->create([
-            'document_type_id' => DocumentType::query()->where('code', 'informe')->sole()->id,
+            'document_type_id' => DocumentType::query()->where('code', $typeCode)->sole()->id,
             'origin_unit_id' => $origin->id,
             'created_by' => $creator->id,
             'subject' => 'Flujo documental '.Str::random(8),

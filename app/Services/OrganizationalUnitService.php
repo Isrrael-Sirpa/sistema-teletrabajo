@@ -52,7 +52,7 @@ class OrganizationalUnitService
         $this->ensureCareer($unit);
 
         return DB::transaction(function () use ($actor, $unit, $data): OrganizationalUnit {
-            $oldValues = $unit->only(['name', 'acronym', 'description', 'is_active']);
+            $oldValues = $unit->only(['name', 'acronym', 'correlative_prefix', 'description', 'is_active']);
             $unit->update($data);
 
             $this->audit->record(
@@ -60,7 +60,7 @@ class OrganizationalUnitService
                 AuditAction::UNIT_UPDATED,
                 $unit,
                 $oldValues,
-                $unit->only(['name', 'acronym', 'description', 'is_active']),
+                $unit->only(['name', 'acronym', 'correlative_prefix', 'description', 'is_active']),
             );
 
             return $unit->refresh();

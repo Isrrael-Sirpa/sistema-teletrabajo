@@ -13,7 +13,7 @@ class DocumentTypeService
     public function __construct(private readonly AuditLogService $audit) {}
 
     /**
-     * @param  array{name: string, description?: string|null}  $data
+     * @param  array{name: string, correlative_label: string, description?: string|null}  $data
      */
     public function create(User $actor, array $data): DocumentType
     {
@@ -29,6 +29,7 @@ class DocumentTypeService
                 'public_id' => $documentType->public_id,
                 'name' => $documentType->name,
                 'code' => $documentType->code,
+                'correlative_label' => $documentType->correlative_label,
                 'is_active' => $documentType->is_active,
             ]);
 
@@ -37,12 +38,12 @@ class DocumentTypeService
     }
 
     /**
-     * @param  array{name: string, description?: string|null}  $data
+     * @param  array{name: string, correlative_label: string, description?: string|null}  $data
      */
     public function update(User $actor, DocumentType $documentType, array $data): DocumentType
     {
         return DB::transaction(function () use ($actor, $documentType, $data): DocumentType {
-            $oldValues = $documentType->only(['name', 'description', 'is_active']);
+            $oldValues = $documentType->only(['name', 'correlative_label', 'description', 'is_active']);
             $documentType->update($data);
 
             $this->audit->record(
@@ -50,7 +51,7 @@ class DocumentTypeService
                 AuditAction::DOCUMENT_TYPE_UPDATED,
                 $documentType,
                 $oldValues,
-                $documentType->only(['name', 'description', 'is_active']),
+                $documentType->only(['name', 'correlative_label', 'description', 'is_active']),
             );
 
             return $documentType->refresh();

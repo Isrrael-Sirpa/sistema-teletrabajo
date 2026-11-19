@@ -6,6 +6,7 @@ use App\Enums\DocumentAccessPermission;
 use App\Enums\DocumentConfidentiality;
 use App\Enums\DocumentPriority;
 use App\Enums\DocumentRecipientStatus;
+use App\Enums\DocumentStatus;
 use App\Http\Requests\SearchDocumentsRequest;
 use App\Http\Requests\StoreDocumentRequest;
 use App\Http\Requests\UpdateDocumentRequest;
@@ -22,6 +23,7 @@ use App\Services\DocumentFileService;
 use App\Services\DocumentRecipientEligibility;
 use App\Services\DocumentReviewService;
 use App\Services\DocumentSearchService;
+use App\Services\DocumentWorkflowService;
 use App\Services\DocumentWorkQueryService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -93,7 +95,7 @@ class DocumentController extends Controller
         ));
     }
 
-    public function show(Request $request, Document $document, DocumentReviewService $reviews): View
+    public function show(Request $request, Document $document, DocumentReviewService $reviews, DocumentWorkflowService $workflow): View
     {
         Gate::authorize('view', $document);
         $actor = $request->user();
@@ -103,6 +105,8 @@ class DocumentController extends Controller
             'documentType',
             'originUnit',
             'creator',
+            'authorizationRequester',
+            'authorizer',
             'annuller',
             'recipients' => fn ($recipients) => $recipients->when(
                 $taskOnly,
@@ -188,6 +192,9 @@ class DocumentController extends Controller
                 'historial',
             )
             ->withQueryString();
+        $correlativePreview = $document->general_status === DocumentStatus::DRAFT
+            ? $workflow->previewCode($document)
+            : null;
 
         return view('documents.show', compact(
             'document',
@@ -209,6 +216,7 @@ class DocumentController extends Controller
             'isUnitResponsible',
             'taskOnly',
             'history',
+            'correlativePreview',
         ));
     }
 
@@ -262,6 +270,9 @@ class DocumentController extends Controller
 
         return [
             'documentTypes' => DocumentType::query()->availableForNewDocuments()->get(),
+            'selectedDocumentTypeId' => DocumentType::query()->availableForNewDocuments()
+                ->where('public_id', $request->query('document_type'))
+                ->value('id'),
             'originUnits' => $canSelectOrigin
                 ? OrganizationalUnit::query()->active()->orderBy('type')->orderBy('name')->get()
                 : collect(),

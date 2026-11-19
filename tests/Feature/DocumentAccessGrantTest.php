@@ -32,6 +32,7 @@ class DocumentAccessGrantTest extends TestCase
         parent::setUp();
         $this->seed([AuthorizationSeeder::class, DocumentTypeSeeder::class]);
         Storage::fake('documentos');
+        config(['documents.disk' => 'documentos']);
     }
 
     public function test_admin_can_grant_view_or_download_and_co_admin_can_grant(): void

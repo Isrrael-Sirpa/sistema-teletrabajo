@@ -32,6 +32,7 @@ class DocumentInternalReviewTest extends TestCase
         $this->withoutVite();
         $this->seed([AuthorizationSeeder::class, InstitutionalStructureSeeder::class, DocumentTypeSeeder::class]);
         Storage::fake('documentos');
+        config(['documents.disk' => 'documentos']);
     }
 
     public function test_each_destination_receives_assigns_and_decides_independently(): void
@@ -90,7 +91,7 @@ class DocumentInternalReviewTest extends TestCase
         $this->get(route('documents.show', $document))->assertOk()
             ->assertSee('Entregar revisión')->assertDontSee('Verificar registro académico.');
         $this->get(route('documents.files.download', [$document, $file]))->assertOk();
-        $this->get(route('reports.documents.index'))->assertViewHas('documentos', fn ($documents) => $documents->isEmpty());
+        $this->get(route('reports.documents.index'))->assertViewHas('documents', fn ($documents) => $documents->isEmpty());
         $this->actingAs($secondSecretary)->patch(route('documents.reviews.update', [$document, $task]), [
             'recommendation' => 'reject',
             'message' => 'Tarea de otra persona.',

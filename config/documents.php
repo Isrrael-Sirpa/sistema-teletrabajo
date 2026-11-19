@@ -55,7 +55,7 @@ return [
     'workflow' => [
         'reason_max_length' => (int) env('DOCUMENT_DECISION_REASON_MAX_LENGTH', 2_000),
         'annulment_reason_max_length' => (int) env('DOCUMENT_ANNULMENT_REASON_MAX_LENGTH', 2_000),
-        'code_digits' => (int) env('DOCUMENT_CODE_DIGITS', 6),
+        'code_digits' => (int) env('DOCUMENT_CODE_DIGITS', 3),
     ],
 
     'history' => [

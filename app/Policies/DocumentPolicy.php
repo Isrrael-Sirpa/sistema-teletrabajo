@@ -4,6 +4,7 @@ namespace App\Policies;
 
 use App\Enums\DocumentRecipientStatus;
 use App\Enums\DocumentStatus;
+use App\Enums\OutgoingAuthorizationStatus;
 use App\Enums\PermissionName;
 use App\Enums\RoleName;
 use App\Enums\UserStatus;
@@ -50,6 +51,8 @@ class DocumentPolicy
     public function update(User $user, Document $document): bool
     {
         if ($document->general_status !== DocumentStatus::DRAFT
+            || $document->authorization_status === OutgoingAuthorizationStatus::PENDING
+            || $document->authorization_status === OutgoingAuthorizationStatus::APPROVED
             || ! $this->hasCapability($user, PermissionName::DOCUMENTS_UPDATE_DRAFT, $document->origin_unit_id)) {
             return false;
         }
@@ -114,8 +117,40 @@ class DocumentPolicy
 
     public function send(User $user, Document $document): bool
     {
-        return $this->hasCapability($user, PermissionName::DOCUMENTS_SEND, $document->origin_unit_id)
-            && $this->update($user, $document);
+        if (! $this->hasCapability($user, PermissionName::DOCUMENTS_SEND, $document->origin_unit_id)
+            || $document->general_status !== DocumentStatus::DRAFT) {
+            return false;
+        }
+
+        if ($user->hasRole(RoleName::SECRETARY->value)) {
+            return $document->created_by === $user->getKey()
+                && $document->origin_unit_id === $user->organizational_unit_id
+                && ($document->authorization_status === null || in_array($document->authorization_status, [
+                    OutgoingAuthorizationStatus::NOT_REQUIRED,
+                    OutgoingAuthorizationStatus::APPROVED,
+                ], true));
+        }
+
+        return $this->update($user, $document);
+    }
+
+    public function requestAuthorization(User $user, Document $document): bool
+    {
+        return $document->general_status === DocumentStatus::DRAFT
+            && in_array($document->authorization_status, [
+                OutgoingAuthorizationStatus::NOT_REQUESTED,
+                OutgoingAuthorizationStatus::RETURNED,
+            ], true)
+            && $user->hasRole(RoleName::SECRETARY->value)
+            && $document->created_by === $user->getKey()
+            && $document->origin_unit_id === $user->organizational_unit_id;
+    }
+
+    public function decideAuthorization(User $user, Document $document): bool
+    {
+        return $document->general_status === DocumentStatus::DRAFT
+            && $document->authorization_status === OutgoingAuthorizationStatus::PENDING
+            && $user->isResponsibleForUnit($document->origin_unit_id);
     }
 
     public function createCorrectionVersion(User $user, Document $document): bool

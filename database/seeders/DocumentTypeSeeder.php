@@ -26,6 +26,14 @@ class DocumentTypeSeeder extends Seeder
         'otros' => 'Otros',
     ];
 
+    /** @var array<string, string> */
+    private const CORRELATIVE_LABELS = [
+        'carta' => 'CARTA', 'informe' => 'INF.', 'memorandum' => 'MEM.',
+        'circular' => 'CIRC.', 'solicitud' => 'SOL.', 'resolucion' => 'RES.',
+        'nota' => 'NOTA', 'formulario' => 'FORM.', 'certificacion' => 'CERT.',
+        'correspondencia' => 'CORR.', 'documento_kardex' => 'KARDEX', 'otros' => 'OTROS',
+    ];
+
     public function run(): void
     {
         foreach (self::TYPES as $code => $name) {
@@ -38,6 +46,7 @@ class DocumentTypeSeeder extends Seeder
                 DocumentType::query()->create([
                     'name' => $name,
                     'code' => $code,
+                    'correlative_label' => self::CORRELATIVE_LABELS[$code],
                     'description' => null,
                     'is_active' => true,
                     'created_by' => null,

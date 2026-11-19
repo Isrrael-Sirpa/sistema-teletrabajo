@@ -39,6 +39,7 @@ class DocumentFilePreviewTest extends TestCase
         parent::setUp();
         $this->seed([AuthorizationSeeder::class, InstitutionalStructureSeeder::class, DocumentTypeSeeder::class]);
         Storage::fake('documentos');
+        config(['documents.disk' => 'documentos']);
     }
 
     public function test_head_and_assigned_reviewers_can_preview_pdf_without_changing_the_workflow(): void
@@ -94,7 +95,10 @@ class DocumentFilePreviewTest extends TestCase
     public function test_validated_image_metadata_is_served_inline_with_exact_mime(string $extension, string $mime): void
     {
         [$document, $creator] = $this->context();
-        $upload = UploadedFile::fake()->image('imagen.'.$extension, 2, 2);
+        $encoded = $extension === 'png'
+            ? 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+            : '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAX/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAEf/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABBQJ//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPwF//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPwF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQAGPwJ//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPyF//9oADAMBAAIAAwAAABCf/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPxB//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPxB//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxB//9k=';
+        $upload = UploadedFile::fake()->createWithContent('imagen.'.$extension, base64_decode($encoded, true));
         $contents = file_get_contents($upload->getRealPath());
         [$file] = app(DocumentFileService::class)->upload($creator, $document, [$upload], 0);
         $this->actingAs($creator)->get($this->inlineUrl($document, $file))

@@ -37,6 +37,7 @@ class InstitutionalStructureSeeder extends Seeder
                     'parent_id' => $faculty->id,
                     'name' => 'Kardex de la Facultad de Tecnología',
                     'acronym' => 'KARDEX',
+                    'correlative_prefix' => 'FT KARDEX.',
                     'description' => 'Kardex institucional único de la Facultad de Tecnología.',
                     'is_active' => true,
                 ],

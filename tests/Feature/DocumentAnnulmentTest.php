@@ -53,6 +53,7 @@ class DocumentAnnulmentTest extends TestCase
             DocumentTypeSeeder::class,
         ]);
         Storage::fake('documentos');
+        config(['documents.disk' => 'documentos']);
     }
 
     protected function tearDown(): void

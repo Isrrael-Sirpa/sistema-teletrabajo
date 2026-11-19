@@ -12,7 +12,7 @@
 <div class="space-y-5">
     <div class="ft-form-section">
         <h2 class="ft-form-section-title">Identificación de la carrera</h2>
-        <p class="ft-field-help">El nombre y la sigla son obligatorios. Revise la sigla antes de guardar: forma parte de los códigos de documentos futuros.</p>
+        <p class="ft-field-help">El nombre y la sigla general son obligatorios. El prefijo oficial del cite se configura por separado cuando sea necesario.</p>
     </div>
     <div>
         <label for="name" class="block text-sm font-semibold text-slate-800">Nombre de la carrera</label>
@@ -27,9 +27,18 @@
     <div>
         <label for="acronym" class="block text-sm font-semibold text-slate-800">Sigla</label>
         <input id="acronym" name="acronym" type="text" value="{{ old('acronym', $unit?->acronym) }}" required maxlength="20" autocapitalize="characters" spellcheck="false" class="mt-2 block min-h-12 w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-base uppercase text-slate-950 shadow-sm focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20" aria-describedby="acronym-help{{ $errors->has('acronym') ? ' acronym-error' : '' }}" aria-invalid="{{ $errors->has('acronym') ? 'true' : 'false' }}">
-        <p id="acronym-help" class="ft-field-help">La sigla se guardará en mayúsculas. Si la cambia, solo los documentos enviados en adelante utilizarán la nueva sigla; los códigos históricos permanecerán iguales.</p>
+        <p id="acronym-help" class="ft-field-help">Identifica la carrera dentro del sistema. Si todavía no se configuró un prefijo oficial, se utilizará esta sigla para proponer uno automáticamente.</p>
         @error('acronym')<p id="acronym-error" class="ft-field-error">{{ $message }}</p>@enderror
     </div>
+
+    @if ($unit && auth()->user()->hasRole('administrator'))
+        <div>
+            <label for="correlative_prefix" class="block text-sm font-semibold text-slate-800">Prefijo institucional de correspondencia</label>
+            <input id="correlative_prefix" name="correlative_prefix" type="text" value="{{ old('correlative_prefix', $unit->correlative_prefix) }}" maxlength="60" autocapitalize="characters" spellcheck="false" class="mt-2 block min-h-12 w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-base uppercase text-slate-950 shadow-sm focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20" aria-invalid="{{ $errors->has('correlative_prefix') ? 'true' : 'false' }}" @error('correlative_prefix') aria-describedby="correlative-prefix-error" @enderror>
+            <p class="ft-field-help">Ejemplo: FT C.MAZ. Puede ser diferente de la sigla general. Solo afecta documentos enviados en adelante; los cites históricos no cambian.</p>
+            @error('correlative_prefix')<p id="correlative-prefix-error" class="ft-field-error">{{ $message }}</p>@enderror
+        </div>
+    @endif
 
     <div>
         <label for="description" class="block text-sm font-semibold text-slate-800">Descripción <span class="font-normal text-slate-500">(opcional)</span></label>

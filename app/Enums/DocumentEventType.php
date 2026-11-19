@@ -12,6 +12,9 @@ enum DocumentEventType: string
     case RECIPIENT_REMOVED = 'recipient_removed';
     case FILE_ADDED = 'file_added';
     case FILE_REMOVED = 'file_removed';
+    case AUTHORIZATION_REQUESTED = 'authorization_requested';
+    case AUTHORIZATION_APPROVED = 'authorization_approved';
+    case AUTHORIZATION_RETURNED = 'authorization_returned';
     case DOCUMENT_SENT = 'document_sent';
     case DOCUMENT_RECEIVED = 'document_received';
     case REVIEW_STARTED = 'review_started';
@@ -33,6 +36,9 @@ enum DocumentEventType: string
             self::RECIPIENT_REMOVED => 'Destinatario retirado',
             self::FILE_ADDED => 'Archivo adjunto agregado',
             self::FILE_REMOVED => 'Archivo adjunto retirado',
+            self::AUTHORIZATION_REQUESTED => 'Autorización de salida solicitada',
+            self::AUTHORIZATION_APPROVED => 'Salida autorizada',
+            self::AUTHORIZATION_RETURNED => 'Autorización devuelta',
             self::DOCUMENT_SENT => 'Documento enviado',
             self::DOCUMENT_RECEIVED => 'Documento recibido',
             self::REVIEW_STARTED => 'Revisión iniciada',

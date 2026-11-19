@@ -59,7 +59,7 @@ class TemporaryDelegationController extends Controller
             'careers' => $careers,
             'heads' => $heads,
             'secretaries' => $secretaries,
-            'capabilities' => CareerHeadDelegationCatalog::permissions(),
+            'capabilityGroups' => CareerHeadDelegationCatalog::groups(),
             'fixedHead' => $actor->hasRole(RoleName::CAREER_HEAD->value) ? $actor : null,
         ]);
     }

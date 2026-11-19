@@ -44,6 +44,18 @@ class DocumentDecisionNotification extends Notification
 
         $identifier = $this->document->code ?? 'El documento';
         [$title, $message] = match ($this->eventType) {
+            DocumentEventType::AUTHORIZATION_REQUESTED => [
+                'Autorización de salida solicitada',
+                "Se solicita su autorización para enviar {$identifier}.",
+            ],
+            DocumentEventType::AUTHORIZATION_APPROVED => [
+                'Envío autorizado',
+                "{$identifier} fue autorizado y ya puede enviarse oficialmente.",
+            ],
+            DocumentEventType::AUTHORIZATION_RETURNED => [
+                'Solicitud de autorización devuelta',
+                "{$identifier} requiere correcciones antes de enviarse. Observación: {$this->reason}",
+            ],
             DocumentEventType::DOCUMENT_RECEIVED => [
                 'Documento recibido',
                 "{$identifier} fue recibido por el destino.",
