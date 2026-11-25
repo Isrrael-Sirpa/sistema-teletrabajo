@@ -65,6 +65,7 @@ class DashboardService
                 RoleName::SECRETARY => $this->secretaryCards($user, $unreadCount),
                 RoleName::SECRETARY_ASSISTANT => $this->assistantCards($user, $unreadCount),
                 RoleName::EXTRA => $this->extraCards($user, $unreadCount),
+                RoleName::STUDENT => $this->studentCards($user, $unreadCount),
                 default => [$this->notificationCard($unreadCount)],
             },
             'quickLinks' => $this->quickLinks($user, $role),
@@ -215,6 +216,18 @@ class DashboardService
     {
         return [
             $this->workCard($user, 'Documentos autorizados', 'authorized', 'Accesos explícitos vigentes.'),
+            $this->notificationCard($unreadCount),
+        ];
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private function studentCards(User $user, int $unreadCount): array
+    {
+        $documents = Document::query()->visibleTo($user);
+
+        return [
+            $this->card('Documentos enviados', (clone $documents)->whereNotNull('sent_at')->count(), route('documents.index'), 'Consulte la fecha, el destino y el estado de sus envíos.'),
+            $this->card('Borradores', (clone $documents)->where('general_status', DocumentStatus::DRAFT->value)->count(), route('documents.index', ['status' => 'draft']), 'Continúe preparando una solicitud y adjunte sus archivos.'),
             $this->notificationCard($unreadCount),
         ];
     }

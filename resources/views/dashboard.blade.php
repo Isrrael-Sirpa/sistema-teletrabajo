@@ -27,6 +27,7 @@
     @if ($unitDashboard)
         @include('dashboard.unit')
     @else
+    @unless ($role === App\Enums\RoleName::STUDENT)
     <section class="mt-8" aria-labelledby="attention-title">
         <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
             <div><p class="ft-eyebrow">Por dónde empezar</p><h2 id="attention-title" class="mt-1 text-xl font-bold text-[var(--ft-primary)]">{{ $role === App\Enums\RoleName::EXTRA ? 'Documentos autorizados recientes' : 'Necesitan su atención' }}</h2></div>
@@ -65,6 +66,7 @@
             </ul>
         </div>
     </section>
+    @endunless
 
     <section class="mt-9" aria-labelledby="summary-title">
         <p class="ft-eyebrow">Vista rápida</p>

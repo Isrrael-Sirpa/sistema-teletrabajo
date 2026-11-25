@@ -11,6 +11,7 @@ enum RoleName: string
     case SECRETARY = 'secretary';
     case SECRETARY_ASSISTANT = 'secretary_assistant';
     case EXTRA = 'extra';
+    case STUDENT = 'student';
 
     public function isGlobal(): bool
     {
@@ -34,7 +35,7 @@ enum RoleName: string
 
     public function isSecondary(): bool
     {
-        return in_array($this, [self::SECRETARY, self::SECRETARY_ASSISTANT, self::EXTRA], true);
+        return in_array($this, [self::SECRETARY, self::SECRETARY_ASSISTANT, self::EXTRA, self::STUDENT], true);
     }
 
     public function canBePersonalDocumentRecipient(): bool
@@ -57,6 +58,7 @@ enum RoleName: string
             self::SECRETARY => 'Secretaria',
             self::SECRETARY_ASSISTANT => 'Auxiliar de Secretaría',
             self::EXTRA => 'Extra',
+            self::STUDENT => 'Estudiante',
         };
     }
 
@@ -70,6 +72,7 @@ enum RoleName: string
             self::SECRETARY => 'Gestión documental operativa dentro de su ámbito.',
             self::SECRETARY_ASSISTANT => 'Apoyo de revisión y seguimiento sin decisiones definitivas.',
             self::EXTRA => 'Consulta y descarga únicamente mediante autorización explícita.',
+            self::STUDENT => 'Presentación de documentos y seguimiento limitado desde su carrera.',
         };
     }
 }

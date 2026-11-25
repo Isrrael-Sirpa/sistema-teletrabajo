@@ -256,6 +256,7 @@ class UserManagementService
         $unit = OrganizationalUnit::query()
             ->whereKey($unitId ?: 0)
             ->availableAsDocumentDestination()
+            ->when($role === RoleName::STUDENT, fn ($query) => $query->where('type', 'career'))
             ->first();
 
         if (! $unit || ($role->isUnitResponsible() && $unit->type->responsibleRole() !== $role)) {

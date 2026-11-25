@@ -112,6 +112,15 @@ final class RbacCatalog
                 PermissionName::DOCUMENTS_VIEW,
                 PermissionName::DOCUMENTS_DOWNLOAD,
             ]),
+            RoleName::STUDENT->value => self::values([
+                PermissionName::DOCUMENTS_VIEW,
+                PermissionName::DOCUMENTS_CREATE,
+                PermissionName::DOCUMENTS_UPDATE_DRAFT,
+                PermissionName::DOCUMENTS_DISCARD_DRAFT,
+                PermissionName::DOCUMENTS_SEND,
+                PermissionName::DOCUMENTS_DOWNLOAD,
+                PermissionName::DOCUMENTS_VERSION,
+            ]),
         ];
 
         $roles[RoleName::KARDEX_HEAD->value] = array_values(array_diff(

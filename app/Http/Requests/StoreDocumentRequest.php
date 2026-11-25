@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use App\Enums\DocumentConfidentiality;
 use App\Enums\DocumentPriority;
+use App\Enums\RoleName;
 use App\Models\Document;
 use App\Models\DocumentType;
 use App\Models\OrganizationalUnit;
@@ -26,7 +27,13 @@ class StoreDocumentRequest extends FormRequest
             'document_type_id' => [
                 'required',
                 'integer',
-                Rule::exists(DocumentType::class, 'id')->where('is_active', true),
+                Rule::exists(DocumentType::class, 'id')->where(function ($query): void {
+                    $query->where('is_active', true);
+
+                    if ($this->user()?->hasRole(RoleName::STUDENT->value)) {
+                        $query->whereIn('code', ['solicitud', 'otros']);
+                    }
+                }),
             ],
             'origin_unit_id' => [
                 Rule::requiredIf($this->user()?->hasInstitutionalGlobalScope() === true),
@@ -36,8 +43,8 @@ class StoreDocumentRequest extends FormRequest
             ],
             'subject' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:5000'],
-            'priority' => ['required', Rule::enum(DocumentPriority::class)],
-            'confidentiality' => ['required', Rule::enum(DocumentConfidentiality::class)],
+            'priority' => ['required', $this->studentRule(Rule::enum(DocumentPriority::class), DocumentPriority::NORMAL->value)],
+            'confidentiality' => ['required', $this->studentRule(Rule::enum(DocumentConfidentiality::class), DocumentConfidentiality::NORMAL->value)],
             'due_at' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:today'],
         ];
     }
@@ -72,5 +79,10 @@ class StoreDocumentRequest extends FormRequest
             'priority' => $this->input('priority', DocumentPriority::NORMAL->value),
             'confidentiality' => $this->input('confidentiality', DocumentConfidentiality::NORMAL->value),
         ]);
+    }
+
+    private function studentRule(mixed $rule, string $studentValue): mixed
+    {
+        return $this->user()?->hasRole(RoleName::STUDENT->value) ? Rule::in([$studentValue]) : $rule;
     }
 }

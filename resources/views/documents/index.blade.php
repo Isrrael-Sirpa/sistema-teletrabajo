@@ -27,7 +27,7 @@
     @endphp
 
     <form method="GET" action="{{ route('documents.index') }}" class="ft-card mt-6 space-y-4 p-4 sm:p-5" aria-labelledby="document-search-title">
-        <div><h2 id="document-search-title" class="ft-form-section-title">Buscar y filtrar documentos</h2><p class="ft-field-help">Escriba un código o parte del asunto. Use los filtros solo si necesita precisar la búsqueda.</p></div>
+        <div><h2 id="document-search-title" class="ft-form-section-title">{{ auth()->user()->hasRole('student') ? 'Buscar documentos' : 'Buscar y filtrar documentos' }}</h2><p class="ft-field-help">{{ auth()->user()->hasRole('student') ? 'Busque sus documentos por código o asunto.' : 'Escriba un código o parte del asunto. Use los filtros solo si necesita precisar la búsqueda.' }}</p></div>
         @if ($workFilter !== '')
             <input type="hidden" name="work" value="{{ $workFilter }}">
         @endif
@@ -35,6 +35,7 @@
             <label class="text-sm font-bold text-slate-800">Código o asunto
                 <input type="search" name="q" value="{{ $filters['q'] ?? '' }}" maxlength="120" placeholder="Escriba un código o un asunto" class="mt-2 block min-h-11 w-full rounded-lg border-slate-300 text-sm focus:border-blue-600 focus:ring-blue-600">
             </label>
+            @unless (auth()->user()->hasRole('student'))
             <label class="text-sm font-bold text-slate-800">Estado documental
                 <select name="status" class="mt-2 block min-h-11 w-full rounded-lg border-slate-300 text-sm focus:border-blue-600 focus:ring-blue-600">
                     <option value="">Todos</option>
@@ -43,8 +44,10 @@
                     @endforeach
                 </select>
             </label>
+            @endunless
         </div>
 
+        @unless (auth()->user()->hasRole('student'))
         <details @if($hasAdvancedFilters) open @endif class="rounded-lg border border-slate-200">
             <summary class="cursor-pointer px-4 py-3 text-sm font-bold text-[var(--ft-secondary)]">Más filtros <span class="ml-1 font-normal text-slate-600">· prioridad, fechas y destinatarios</span>@if ($hasAdvancedFilters)<span class="ft-badge ml-2 bg-blue-100 text-blue-900">En uso</span>@endif</summary>
             <div class="grid gap-4 border-t border-slate-200 p-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -118,6 +121,7 @@
                 </label>
             </div>
         </details>
+        @endunless
 
         <div class="flex flex-wrap items-end gap-3">
             <button type="submit" class="ft-button-primary">Buscar</button>
@@ -154,7 +158,7 @@
                     @forelse ($documents as $document)
                         <tr role="row">
                             <td role="cell" data-label="Documento" class="px-5 py-4">
-                                <p class="text-xs font-bold text-[var(--ft-secondary)]">{{ $document->code ?? 'Borrador sin código' }}</p>
+                                <p class="text-xs font-bold text-[var(--ft-secondary)]">{{ auth()->user()->hasRole('student') ? ($document->sent_at ? 'Solicitud enviada' : 'Borrador de solicitud') : ($document->code ?? 'Borrador sin código') }}</p>
                                 <a href="{{ route('documents.show', $document) }}" class="mt-1 block max-w-sm break-words font-semibold text-slate-900 underline-offset-4 hover:underline">{{ $document->subject }}</a>
                                 <p class="mt-1 text-xs text-slate-500">{{ $document->documentType->name }}</p>
                             </td>

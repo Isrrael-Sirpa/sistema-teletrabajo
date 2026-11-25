@@ -158,6 +158,10 @@ class DocumentController extends Controller
         if ($canManageRecipients) {
             $recipientUnits = OrganizationalUnit::query()
                 ->availableAsDocumentDestination()
+                ->when($actor->hasRole(\App\Enums\RoleName::STUDENT->value), fn ($query) => $query->where(function ($allowed) use ($actor): void {
+                    $allowed->where('type', 'kardex')
+                        ->orWhere(fn ($career) => $career->where('type', 'career')->whereKey($actor->organizational_unit_id));
+                }))
                 ->orderBy('type')
                 ->orderBy('name')
                 ->get();
@@ -267,10 +271,17 @@ class DocumentController extends Controller
     {
         $user = $request->user();
         $canSelectOrigin = $user->hasInstitutionalGlobalScope();
+        $documentTypes = DocumentType::query()->availableForNewDocuments();
+        $selectedDocumentType = DocumentType::query()->availableForNewDocuments();
+
+        if ($user->hasRole(\App\Enums\RoleName::STUDENT->value)) {
+            $documentTypes->whereIn('code', ['solicitud', 'otros']);
+            $selectedDocumentType->whereIn('code', ['solicitud', 'otros']);
+        }
 
         return [
-            'documentTypes' => DocumentType::query()->availableForNewDocuments()->get(),
-            'selectedDocumentTypeId' => DocumentType::query()->availableForNewDocuments()
+            'documentTypes' => $documentTypes->get(),
+            'selectedDocumentTypeId' => $selectedDocumentType
                 ->where('public_id', $request->query('document_type'))
                 ->value('id'),
             'originUnits' => $canSelectOrigin

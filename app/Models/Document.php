@@ -109,6 +109,14 @@ class Document extends Model
             return $query;
         }
 
+        if ($user->hasRole(RoleName::STUDENT->value)) {
+            return $query->where('origin_unit_id', $user->organizational_unit_id)
+                ->where(function (Builder $own) use ($user): void {
+                    $own->where('created_by', $user->getKey())
+                        ->orWhere('sender_user_id', $user->getKey());
+                });
+        }
+
         $delegatedUnits = app(DelegatedAuthorizationService::class)
             ->unitIdsFor($user, PermissionName::DOCUMENTS_VIEW);
 

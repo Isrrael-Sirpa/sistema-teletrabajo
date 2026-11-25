@@ -28,7 +28,7 @@ class DocumentRecipientService
 
         try {
             return DB::transaction(function () use ($actor, $document, $data): DocumentRecipient {
-                $target = $this->resolveTarget($data);
+                $target = $this->resolveTarget($actor, $data);
 
                 $existing = DocumentRecipient::withTrashed()
                     ->where('document_id', $document->getKey())
@@ -146,7 +146,7 @@ class DocumentRecipientService
     /** @param array<string, mixed> $data
      * @return array{unit_id: int, user_id: int|null}
      */
-    private function resolveTarget(array $data): array
+    private function resolveTarget(User $actor, array $data): array
     {
         if ($data['recipient_type'] === 'unit') {
             $unit = OrganizationalUnit::query()
@@ -159,7 +159,15 @@ class DocumentRecipientService
                 ]);
             }
 
+            $this->eligibility->assertAllowedUnitFor($actor, $unit);
+
             return ['unit_id' => $unit->getKey(), 'user_id' => null];
+        }
+
+        if ($actor->hasRole(\App\Enums\RoleName::STUDENT->value)) {
+            throw ValidationException::withMessages([
+                'recipient_type' => 'Como estudiante, solo puede enviar documentos a su carrera o a Kardex.',
+            ]);
         }
 
         $user = User::query()->find($data['user_id']);

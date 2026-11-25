@@ -65,6 +65,7 @@
     </div>
 </section>
 
+@unless (auth()->user()->hasRole('student'))
 <section class="ft-form-section mt-8 border-t border-slate-200 pt-7" aria-labelledby="document-attention-title">
     <div>
         <h2 id="document-attention-title" class="ft-form-section-title">¿Cómo debe atenderse?</h2>
@@ -101,6 +102,7 @@
         </div>
     </div>
 </section>
+@endunless
 
 @if ($editing)
     <input type="hidden" name="lock_version" value="{{ old('lock_version', $document->lock_version) }}">

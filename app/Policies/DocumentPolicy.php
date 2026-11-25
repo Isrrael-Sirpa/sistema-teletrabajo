@@ -50,6 +50,12 @@ class DocumentPolicy
 
     public function update(User $user, Document $document): bool
     {
+        if ($user->hasRole(RoleName::STUDENT->value)) {
+            return $document->general_status === DocumentStatus::DRAFT
+                && $document->created_by === $user->getKey()
+                && $document->origin_unit_id === $user->organizational_unit_id;
+        }
+
         if ($document->general_status !== DocumentStatus::DRAFT
             || $document->authorization_status === OutgoingAuthorizationStatus::PENDING
             || $document->authorization_status === OutgoingAuthorizationStatus::APPROVED
@@ -117,6 +123,13 @@ class DocumentPolicy
 
     public function send(User $user, Document $document): bool
     {
+        if ($user->hasRole(RoleName::STUDENT->value)) {
+            return $document->general_status === DocumentStatus::DRAFT
+                && $document->created_by === $user->getKey()
+                && $document->origin_unit_id === $user->organizational_unit_id
+                && $user->can(PermissionName::DOCUMENTS_SEND->value);
+        }
+
         if (! $this->hasCapability($user, PermissionName::DOCUMENTS_SEND, $document->origin_unit_id)
             || $document->general_status !== DocumentStatus::DRAFT) {
             return false;

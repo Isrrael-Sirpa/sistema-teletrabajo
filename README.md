@@ -368,6 +368,7 @@ composer audit
 - [Fase 22: anulación documental](docs/FASE_22_ANULACION_DOCUMENTAL.md)
 - [Fase 23: producción y seguridad](docs/FASE_23_PRODUCCION_SEGURIDAD.md)
 - [Fase 24: cierre técnico](docs/FASE_24_CIERRE_TECNICO.md)
+- [Fase 25: acceso de estudiantes](docs/FASE_25_ACCESO_ESTUDIANTES.md)
 - [Rediseño visual y experiencia de usuario](docs/REDISENO_VISUAL.md)
 - [Iteración de producto institucional: UX y validación](docs/PRODUCTO_INSTITUCIONAL_UX.md)
 - [Autoridad formal y visor privado de archivos](docs/AUTORIDAD_Y_VISOR_PRIVADO.md)

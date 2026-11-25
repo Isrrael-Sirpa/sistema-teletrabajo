@@ -41,7 +41,11 @@
 <x-layouts.authenticated :title="$document->subject" :career-unit="$document->originUnit->type === App\Enums\OrganizationalUnitType::CAREER ? $document->originUnit : null">
     <div class="ft-page-header">
         <div>
-            <p class="ft-section-heading">{{ $document->code ?? ($correlativePreview ?? 'Cite pendiente de configuración') }}</p>
+            @if ($viewer->hasRole('student'))
+                <p class="ft-section-heading">{{ $isDraft ? 'Solicitud en preparación' : 'Solicitud presentada' }}</p>
+            @else
+                <p class="ft-section-heading">{{ $document->code ?? ($correlativePreview ?? 'Cite pendiente de configuración') }}</p>
+            @endif
             <h1 class="ft-page-title max-w-4xl">{{ $document->subject }}</h1>
             <div class="mt-3 flex flex-wrap gap-2">
                 <x-ui.status-badge :status="$document->general_status" />
@@ -209,7 +213,9 @@
                 @unless ($canObtainFiles && $documentFiles->isNotEmpty())
                     <a href="#files-title" class="ft-button-secondary">Ver archivos</a>
                 @endunless
-                <a href="#history-title" class="ft-button-secondary">Ver historial</a>
+                @unless ($viewer->hasRole('student'))
+                    <a href="#history-title" class="ft-button-secondary">Ver historial</a>
+                @endunless
             </div>
         </section>
     @endif
@@ -220,7 +226,9 @@
             <h2 id="annulled-title" class="mt-2 text-2xl font-black text-red-950">DOCUMENTO ANULADO</h2>
             <p class="mt-2 text-sm leading-6 text-red-900">Este documento quedó sin efecto institucional. El código, archivos, versiones, destinatarios, decisiones e historial permanecen conservados.</p>
             <dl class="mt-4 grid gap-4 sm:grid-cols-3">
+            @unless ($viewer->hasRole('student'))
                 <div><dt class="text-xs font-bold uppercase tracking-wide text-red-800">Código</dt><dd class="mt-1 text-sm font-semibold text-red-950">{{ $document->code }}</dd></div>
+            @endunless
                 <div><dt class="text-xs font-bold uppercase tracking-wide text-red-800">Anulado por</dt><dd class="mt-1 text-sm font-semibold text-red-950">{{ $document->annuller?->name ?? 'Usuario institucional' }}</dd></div>
                 <div><dt class="text-xs font-bold uppercase tracking-wide text-red-800">Fecha de anulación</dt><dd class="mt-1 text-sm font-semibold text-red-950">{{ $document->annulled_at?->timezone(config('app.timezone'))->format('d/m/Y H:i:s') }}</dd></div>
             </dl>
@@ -231,6 +239,7 @@
         </section>
     @endif
 
+    @unless ($viewer->hasRole('student'))
     @unless ($isDraft)
         <details @if ($taskOnly) open @endif class="ft-card mt-6 p-5 sm:p-7">
             <summary id="document-data-title" class="text-lg font-bold text-slate-950">Información del documento <span class="ml-2 text-sm font-normal text-slate-600">(ver detalles)</span></summary>
@@ -239,7 +248,9 @@
             <h2 id="document-data-title" class="text-lg font-bold text-slate-950">Datos del documento</h2>
     @endunless
         <dl class="mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            <div><dt class="text-xs font-bold uppercase tracking-wide text-slate-500">Cite</dt><dd class="mt-1 text-sm font-semibold text-slate-900">{{ $document->code ?? ($correlativePreview ?? 'Pendiente de configuración') }}</dd>@if ($isDraft && $correlativePreview)<p class="mt-1 text-xs text-slate-500">El número se asignará automáticamente al enviar.</p>@endif</div>
+                @unless ($viewer->hasRole('student'))
+                                <div><dt class="text-xs font-bold uppercase tracking-wide text-slate-500">Cite</dt><dd class="mt-1 text-sm font-semibold text-slate-900">{{ $document->code ?? ($correlativePreview ?? 'Pendiente de configuración') }}</dd>@if ($isDraft && $correlativePreview)<p class="mt-1 text-xs text-slate-500">El número se asignará automáticamente al enviar.</p>@endif</div>
+                @endunless
             <div><dt class="text-xs font-bold uppercase tracking-wide text-slate-500">Tipo documental</dt><dd class="mt-1 text-sm text-slate-900">{{ $document->documentType->name }}</dd></div>
             <div><dt class="text-xs font-bold uppercase tracking-wide text-slate-500">Unidad de origen</dt><dd class="mt-1 text-sm text-slate-900">{{ $document->originUnit->name }}</dd></div>
             <div><dt class="text-xs font-bold uppercase tracking-wide text-slate-500">Creado por</dt><dd class="mt-1 text-sm text-slate-900">{{ $document->creator->name }}</dd></div>
@@ -267,6 +278,7 @@
         </details>
     @else
         </section>
+    @endunless
     @endunless
 
     <section @if ($isDraft && $canManageRecipients) data-recipient-editor="{{ $document->public_id }}" @endif class="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7" aria-labelledby="recipients-title">
@@ -839,7 +851,9 @@
             <p class="mt-2 text-sm leading-6 text-blue-900">Revise el resumen antes de enviar. El sistema asignará el número correlativo y volverá inmutables los destinatarios y archivos de esta entrega.</p>
             <dl data-recipient-send-summary class="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
                 <div><dt class="font-bold text-blue-950">Origen</dt><dd class="text-blue-900">{{ $document->originUnit->name }}</dd></div>
-                <div><dt class="font-bold text-blue-950">Cite previsto</dt><dd class="text-blue-900">{{ $correlativePreview ?? 'Pendiente de configuración' }}</dd></div>
+                @unless ($viewer->hasRole('student'))
+                                    <div><dt class="font-bold text-blue-950">Cite previsto</dt><dd class="text-blue-900">{{ $correlativePreview ?? 'Pendiente de configuración' }}</dd></div>
+                @endunless
                 <div><dt class="font-bold text-blue-950">Tipo</dt><dd class="text-blue-900">{{ $document->documentType->name }}</dd></div>
                 <div><dt class="font-bold text-blue-950">Asunto</dt><dd class="text-blue-900">{{ $document->subject }}</dd></div>
                 <div><dt class="font-bold text-blue-950">Destinatarios principales</dt><dd class="text-blue-900">{{ $mainRecipients->map(fn ($recipient) => $recipient->user?->name ?? $recipient->unit->name)->join(', ') ?: 'Ninguno' }}</dd></div>
@@ -879,7 +893,9 @@
             <h2 id="annul-title" class="mt-2 text-xl font-black text-red-950">Anular documento</h2>
             <p class="mt-2 text-sm leading-6 text-red-900">Esta acción dejará el documento sin efecto institucional. El expediente y su historial permanecerán conservados. No equivale a borrar, rechazar ni devolver y no podrá deshacerse.</p>
             <dl class="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+                @unless ($viewer->hasRole('student'))
                 <div><dt class="font-bold text-red-950">Código oficial</dt><dd class="text-red-900">{{ $document->code }}</dd></div>
+                @endunless
                 <div><dt class="font-bold text-red-950">Estado actual</dt><dd class="text-red-900">{{ $document->general_status->label() }}</dd></div>
             </dl>
             <form method="POST" action="{{ route('documents.annul', $document) }}" class="mt-5" onsubmit="return confirm('¿Desea anular este documento? Quedará sin efecto institucional y no podrá deshacerse. El expediente y su historial permanecerán conservados.');">
@@ -893,6 +909,7 @@
         </section>
     @endcan
 
+    @unless ($viewer->hasRole('student'))
     @if ($isDraft)
         <section class="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7" aria-labelledby="history-title">
             <h2 id="history-title" class="text-lg font-bold text-slate-950">Historial documental</h2>
@@ -959,6 +976,7 @@
     @else
         </details>
     @endif
+    @endunless
 
     @can('discardDraft', $document)
         <section class="mt-6 rounded-2xl border border-red-200 bg-red-50 p-5" aria-labelledby="discard-title">

@@ -12,6 +12,24 @@ use Illuminate\Validation\ValidationException;
 
 class DocumentRecipientEligibility
 {
+    public function assertAllowedUnitFor(User $actor, \App\Models\OrganizationalUnit $unit): void
+    {
+        if ($actor->hasRole(RoleName::STUDENT->value)
+            && ! in_array($unit->type, [OrganizationalUnitType::CAREER, OrganizationalUnitType::KARDEX], true)) {
+            throw ValidationException::withMessages([
+                'unit_id' => 'Como estudiante, solo puede enviar documentos a su carrera o a Kardex.',
+            ]);
+        }
+
+        if ($actor->hasRole(RoleName::STUDENT->value)
+            && $unit->type === OrganizationalUnitType::CAREER
+            && $unit->getKey() !== $actor->organizational_unit_id) {
+            throw ValidationException::withMessages([
+                'unit_id' => 'Como estudiante, solo puede elegir su propia carrera o Kardex.',
+            ]);
+        }
+    }
+
     /** @return Builder<User> */
     public function personalCandidates(): Builder
     {
