@@ -10,6 +10,7 @@ use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\DocumentFileController;
 use App\Http\Controllers\DocumentRecipientController;
 use App\Http\Controllers\DocumentReportController;
+use App\Http\Controllers\DocumentTemplateController;
 use App\Http\Controllers\DocumentReviewController;
 use App\Http\Controllers\DocumentTypeController;
 use App\Http\Controllers\DocumentWorkflowController;
@@ -43,6 +44,8 @@ Route::middleware(['auth', 'active.user'])->group(function (): void {
 
     Route::get('/control-correlativos', [CorrelativeControlController::class, 'index'])
         ->name('correlatives.index');
+    Route::post('/control-correlativos/reservar', [CorrelativeControlController::class, 'reserve'])
+        ->name('correlatives.reserve');
 
     Route::prefix('reportes')->name('reports.')->middleware('permission_or_delegation:reports.view_unit')->group(function (): void {
         Route::get('/documentos', [DocumentReportController::class, 'index'])->name('documents.index');
@@ -102,6 +105,9 @@ Route::middleware(['auth', 'active.user'])->group(function (): void {
         Route::get('/{document}', [DocumentController::class, 'show'])
             ->middleware('permission_or_delegation:documents.view')
             ->name('show');
+        Route::get('/{document}/plantilla', [DocumentTemplateController::class, 'download'])
+            ->middleware('permission_or_delegation:documents.view')
+            ->name('template.download');
         Route::get('/{document}/editar', [DocumentController::class, 'edit'])
             ->middleware('permission_or_delegation:documents.update_draft')
             ->name('edit');

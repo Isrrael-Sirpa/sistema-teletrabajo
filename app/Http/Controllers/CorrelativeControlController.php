@@ -6,9 +6,10 @@ use App\Enums\RoleName;
 use App\Models\Document;
 use App\Models\DocumentCounter;
 use App\Models\DocumentType;
+use App\Services\CorrelativeReservationService;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
-use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
@@ -25,7 +26,9 @@ class CorrelativeControlController extends Controller
             'page' => ['nullable', 'integer', 'min:1'],
         ]);
         $year = (int) ($filters['year'] ?? now()->year);
-        $documentTypes = DocumentType::query()->availableForNewDocuments()->get();
+        $documentTypes = DocumentType::query()->availableForNewDocuments()
+            ->where('uses_correlative', true)
+            ->get();
         $selectedType = filled($filters['document_type'] ?? null)
             ? $documentTypes->firstWhere('public_id', $filters['document_type'])
             : $documentTypes->first();
@@ -45,41 +48,38 @@ class CorrelativeControlController extends Controller
         $documentsByNumber = $selectedType === null
             ? collect()
             : Document::query()
-                ->with(['documentType', 'originUnit'])
+                ->with(['originUnit', 'correlativeReserver.organizationalUnit'])
                 ->where('document_type_id', $selectedType->id)
-                ->whereNotNull('code')
-                ->whereYear('sent_at', $year)
+                ->where('correlative_year', $year)
+                ->whereNotNull('correlative_number')
                 ->get()
-                ->mapWithKeys(function (Document $document) use ($year): array {
-                    preg_match('/N°\s*(\d+)\/'.$year.'$/u', (string) $document->code, $matches);
+                ->keyBy('correlative_number');
 
-                    return isset($matches[1]) ? [(int) $matches[1] => $document] : [];
-                });
-
-        $numbers = collect(range($firstNumber, $lastVisibleNumber))->map(function (int $number) use (
-            $documentsByNumber,
-            $lastNumber,
-            $user,
-        ): array {
+        $numbers = collect(range($firstNumber, $lastVisibleNumber))->map(function (int $number) use ($documentsByNumber, $lastNumber): array {
             /** @var Document|null $document */
             $document = $documentsByNumber->get($number);
-            $used = $number <= $lastNumber;
-            $canView = $document !== null && Gate::forUser($user)->allows('view', $document);
 
             return [
                 'number' => $number,
-                'used' => $used,
-                'document' => $canView ? $document : null,
+                'used' => $number <= $lastNumber,
+                'reservedBy' => $document?->correlativeReserver,
+                'reservedAt' => $document?->correlative_reserved_at,
+                'sent' => $document === null || $document->sent_at !== null,
             ];
         });
 
-        $paginator = new LengthAwarePaginator(
-            $numbers,
-            $totalNumbers,
-            $perPage,
-            $page,
-            ['path' => route('correlatives.index'), 'query' => $request->except('page')],
-        );
+        $pendingReservation = $selectedType === null ? null : Document::query()
+            ->where('created_by', $user->getKey())
+            ->where('document_type_id', $selectedType->getKey())
+            ->whereNotNull('correlative_number')
+            ->whereNull('sent_at')
+            ->oldest('correlative_reserved_at')
+            ->first();
+
+        $paginator = new LengthAwarePaginator($numbers, $totalNumbers, $perPage, $page, [
+            'path' => route('correlatives.index'),
+            'query' => $request->except('page'),
+        ]);
 
         return view('correlatives.index', [
             'filters' => $filters,
@@ -90,6 +90,22 @@ class CorrelativeControlController extends Controller
             'nextNumber' => $lastNumber + 1,
             'numbers' => $paginator,
             'unit' => $user->organizationalUnit,
+            'pendingReservation' => $pendingReservation,
         ]);
+    }
+
+    public function reserve(Request $request, CorrelativeReservationService $reservations): RedirectResponse
+    {
+        $user = $request->user();
+        abort_unless($user->hasRole(RoleName::SECRETARY->value) && $user->organizationalUnit?->is_active, 403);
+
+        $data = $request->validate([
+            'document_type' => ['required', 'uuid', Rule::exists('tipos_documentos', 'public_id')],
+        ]);
+        $type = DocumentType::query()->where('public_id', $data['document_type'])->firstOrFail();
+        $document = $reservations->reserve($user, $type);
+
+        return redirect()->route('documents.show', $document)
+            ->with('status', 'Se reservó el cite '.$document->code.'. Complete el borrador antes de solicitar su autorización o enviarlo.');
     }
 }

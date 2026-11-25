@@ -103,10 +103,13 @@ class DocumentNotificationRecipientResolver
     public function forAuthorizationResponsibles(Document $document, int $actorId): Collection
     {
         return User::query()
-            ->documentResponsibles()
+            ->with(['organizationalUnit', 'roles'])
+            ->where('status', UserStatus::ACTIVE->value)
             ->where('organizational_unit_id', $document->origin_unit_id)
             ->whereKeyNot($actorId)
-            ->get();
+            ->get()
+            ->filter(fn (User $user): bool => $user->isResponsibleForUnit($document->origin_unit_id))
+            ->values();
     }
 
     /** @return Collection<int, User> */

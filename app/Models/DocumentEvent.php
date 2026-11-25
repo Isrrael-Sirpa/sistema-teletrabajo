@@ -47,6 +47,7 @@ class DocumentEvent extends Model
             DocumentEventType::DOCUMENT_CREATED => "{$actor} creó el borrador.",
             DocumentEventType::DRAFT_UPDATED => "{$actor} actualizó el borrador.",
             DocumentEventType::DRAFT_DISCARDED => "{$actor} descartó el borrador.",
+            DocumentEventType::CORRELATIVE_RESERVED => $actor.' reservó el cite '.($this->metadata['code'] ?? 'correspondiente').'.',
             DocumentEventType::RECIPIENT_ADDED => 'Se agregó a '.$target.' como '.($this->metadata['requires_response'] ?? false ? 'destinatario que requiere respuesta.' : 'copia informativa.'),
             DocumentEventType::RECIPIENT_UPDATED => 'Se cambió la finalidad de '.$target.' a '.($this->metadata['requires_response'] ?? false ? 'requiere respuesta.' : 'copia informativa.'),
             DocumentEventType::RECIPIENT_REMOVED => "Se retiró a {$target} del borrador.",

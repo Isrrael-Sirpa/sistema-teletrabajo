@@ -41,7 +41,7 @@
 <x-layouts.authenticated :title="$document->subject" :career-unit="$document->originUnit->type === App\Enums\OrganizationalUnitType::CAREER ? $document->originUnit : null">
     <div class="ft-page-header">
         <div>
-            <p class="ft-section-heading">{{ $document->code ?? ($correlativePreview ?? 'Cite pendiente de configuración') }}</p>
+            <p class="ft-section-heading">{{ $document->code ?? 'Documento sin correlativo' }}</p>
             <h1 class="ft-page-title max-w-4xl">{{ $document->subject }}</h1>
             <div class="mt-3 flex flex-wrap gap-2">
                 <x-ui.status-badge :status="$document->general_status" />
@@ -57,14 +57,17 @@
             </div>
             <p class="mt-3 text-sm text-slate-600">{{ $document->documentType->name }} · Origen: {{ $document->originUnit->name }} · Creado el {{ $document->created_at->format('d/m/Y') }} · Límite: {{ $document->due_at?->timezone(config('app.timezone'))->format('d/m/Y') ?? 'sin fecha' }}</p>
         </div>
-        <div class="flex flex-wrap gap-2">
+        <div class="flex w-full flex-wrap items-start gap-2 sm:w-auto">
             @can('create', App\Models\WorkActivity::class)
-                <a href="{{ route('activities.create', ['document' => $document->public_id]) }}" class="ft-button-secondary">Asignar actividad vinculada</a>
+                <a href="{{ route('activities.create', ['document' => $document->public_id]) }}" class="ft-button-secondary shrink-0 whitespace-nowrap text-sm">Asignar actividad vinculada</a>
             @endcan
             @can('update', $document)
-                <a href="{{ route('documents.edit', $document) }}" class="ft-button-primary">Editar borrador</a>
+                <a href="{{ route('documents.edit', $document) }}" class="ft-button-primary shrink-0 whitespace-nowrap text-sm">Editar borrador</a>
             @endcan
-            <a href="{{ route('documents.index') }}" class="ft-button-secondary">Volver a documentos</a>
+            @if ($isDraft && $document->documentType->uses_correlative && $document->code && in_array($document->authorization_status, [App\Enums\OutgoingAuthorizationStatus::NOT_REQUESTED, App\Enums\OutgoingAuthorizationStatus::RETURNED], true))
+                <a href="{{ route('documents.template.download', $document) }}" class="ft-button-secondary shrink-0 whitespace-nowrap text-sm">Descargar planilla Word</a>
+            @endif
+            <a href="{{ route('documents.index') }}" class="ft-button-secondary shrink-0 whitespace-nowrap text-sm">Volver a documentos</a>
         </div>
     </div>
 
@@ -242,7 +245,7 @@
             <h2 id="document-data-title" class="text-lg font-bold text-slate-950">Datos del documento</h2>
     @endunless
         <dl class="mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            <div><dt class="text-xs font-bold uppercase tracking-wide text-slate-500">Cite</dt><dd class="mt-1 text-sm font-semibold text-slate-900">{{ $document->code ?? ($correlativePreview ?? 'Pendiente de configuración') }}</dd>@if ($isDraft && $correlativePreview)<p class="mt-1 text-xs text-slate-500">El número se asignará automáticamente al enviar.</p>@endif</div>
+            <div><dt class="text-xs font-bold uppercase tracking-wide text-slate-500">Cite</dt><dd class="mt-1 text-sm font-semibold text-slate-900">{{ $document->code ?? 'Sin correlativo' }}</dd>@if ($isDraft && $document->code)<p class="mt-1 text-xs text-slate-500">Reservado el {{ $document->correlative_reserved_at?->format('d/m/Y H:i') }}. El número no cambiará.</p>@elseif($isDraft && $document->documentType->uses_correlative)<p class="mt-1 text-xs text-slate-500">Debe reservar el cite desde Control de correlativos antes de enviar.</p>@endif</div>
             <div><dt class="text-xs font-bold uppercase tracking-wide text-slate-500">Tipo documental</dt><dd class="mt-1 text-sm text-slate-900">{{ $document->documentType->name }}</dd></div>
             <div><dt class="text-xs font-bold uppercase tracking-wide text-slate-500">Unidad de origen</dt><dd class="mt-1 text-sm text-slate-900">{{ $document->originUnit->name }}</dd></div>
             <div><dt class="text-xs font-bold uppercase tracking-wide text-slate-500">Creado por</dt><dd class="mt-1 text-sm text-slate-900">{{ $document->creator->name }}</dd></div>
@@ -839,10 +842,10 @@
     @can('send', $document)
         <section class="mt-6 rounded-2xl border border-blue-200 bg-blue-50 p-5 sm:p-7" aria-labelledby="send-title">
             <h2 id="send-title" class="text-lg font-bold text-blue-950">Listo para enviar</h2>
-            <p class="mt-2 text-sm leading-6 text-blue-900">Revise el resumen antes de enviar. El sistema asignará el número correlativo y volverá inmutables los destinatarios y archivos de esta entrega.</p>
+            <p class="mt-2 text-sm leading-6 text-blue-900">Revise el resumen antes de enviar. Los destinatarios y archivos quedarán inmutables en esta entrega.</p>
             <dl data-recipient-send-summary class="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
                 <div><dt class="font-bold text-blue-950">Origen</dt><dd class="text-blue-900">{{ $document->originUnit->name }}</dd></div>
-                <div><dt class="font-bold text-blue-950">Cite previsto</dt><dd class="text-blue-900">{{ $correlativePreview ?? 'Pendiente de configuración' }}</dd></div>
+                @if($document->documentType->uses_correlative)<div><dt class="font-bold text-blue-950">Cite reservado</dt><dd class="text-blue-900">{{ $document->code ?? 'Pendiente de reserva' }}</dd></div>@endif
                 <div><dt class="font-bold text-blue-950">Tipo</dt><dd class="text-blue-900">{{ $document->documentType->name }}</dd></div>
                 <div><dt class="font-bold text-blue-950">Asunto</dt><dd class="text-blue-900">{{ $document->subject }}</dd></div>
                 <div><dt class="font-bold text-blue-950">Destinatarios principales</dt><dd class="text-blue-900">{{ $mainRecipients->map(fn ($recipient) => $recipient->user?->name ?? $recipient->unit->name)->join(', ') ?: 'Ninguno' }}</dd></div>

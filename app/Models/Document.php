@@ -23,7 +23,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 #[Fillable([
     'document_type_id', 'origin_unit_id', 'created_by', 'sender_user_id',
     'subject', 'description', 'general_status', 'priority', 'confidentiality',
-    'due_at', 'code', 'lock_version',
+    'due_at', 'code', 'correlative_number', 'correlative_year', 'correlative_reserved_by', 'correlative_reserved_at', 'lock_version',
     'authorization_status', 'authorization_requested_by', 'authorization_requested_at',
     'authorized_by', 'authorized_at', 'authorization_note',
 ])]
@@ -77,6 +77,11 @@ class Document extends Model
     public function authorizer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'authorized_by');
+    }
+
+    public function correlativeReserver(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'correlative_reserved_by');
     }
 
     public function recipients(): HasMany
@@ -154,11 +159,6 @@ class Document extends Model
                                     ->where(fn (Builder $recipients) => $recipients
                                         ->whereNull('user_id')
                                         ->orWhere('requires_response', true)));
-                            } elseif ($user->roleName()?->canReviewInternally()) {
-                                $target->orWhere(fn (Builder $copy) => $copy
-                                    ->whereNull('user_id')
-                                    ->where('requires_response', false)
-                                    ->where('unit_id', $user->organizational_unit_id));
                             }
                         });
                 });
@@ -229,6 +229,9 @@ class Document extends Model
             'confidentiality' => DocumentConfidentiality::class,
             'due_at' => 'datetime',
             'sent_at' => 'datetime',
+            'correlative_reserved_at' => 'datetime',
+            'correlative_number' => 'integer',
+            'correlative_year' => 'integer',
             'annulled_at' => 'datetime',
             'authorization_requested_at' => 'datetime',
             'authorized_at' => 'datetime',

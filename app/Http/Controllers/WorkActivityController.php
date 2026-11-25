@@ -140,7 +140,7 @@ class WorkActivityController extends Controller
     public function show(Request $request, WorkActivity $activity): View
     {
         Gate::authorize('view', $activity);
-        $activity->load(['organizationalUnit', 'document.originUnit', 'resultDocument', 'creator', 'assigner', 'reviewer', 'assignees', 'updates.user', 'files.uploader']);
+        $activity->load(['organizationalUnit', 'document.originUnit', 'document.versions.files', 'resultDocument', 'creator', 'assigner', 'reviewer', 'assignees', 'updates.user', 'files.uploader']);
         $resultDocuments = collect();
         if (Gate::allows('submit', $activity)) {
             $resultDocuments = Document::query()->where('created_by', $request->user()->getKey())

@@ -22,7 +22,8 @@ class StoreDocumentTypeRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:120'],
-            'correlative_label' => ['required', 'string', 'max:30'],
+            'uses_correlative' => ['required', 'boolean'],
+            'correlative_label' => ['nullable', 'string', 'max:30', 'required_if:uses_correlative,1'],
             'description' => ['nullable', 'string', 'max:2000'],
         ];
     }
@@ -59,6 +60,7 @@ class StoreDocumentTypeRequest extends FormRequest
 
         $this->merge([
             'name' => Str::squish((string) $this->input('name')),
+            'uses_correlative' => $this->boolean('uses_correlative'),
             'correlative_label' => Str::upper(Str::squish((string) $this->input('correlative_label'))),
             'description' => filled($description) ? Str::squish((string) $description) : null,
         ]);

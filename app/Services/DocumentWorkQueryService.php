@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Enums\DocumentRecipientStatus;
 use App\Enums\DocumentStatus;
+use App\Enums\OutgoingAuthorizationStatus;
 use App\Enums\PermissionName;
 use App\Enums\RoleName;
 use App\Models\Document;
@@ -67,8 +68,16 @@ class DocumentWorkQueryService
             return true;
         }
 
-        $query->whereNotIn('general_status', [DocumentStatus::DRAFT->value, DocumentStatus::ANNULLED->value])
-            ->whereHas('recipients', fn (Builder $recipients) => $this->pendingUnitRecipients($recipients, $user));
+        $query->where(function (Builder $documents) use ($user): void {
+            $documents->where(function (Builder $received) use ($user): void {
+                $received->whereNotIn('general_status', [DocumentStatus::DRAFT->value, DocumentStatus::ANNULLED->value])
+                    ->whereHas('recipients', fn (Builder $recipients) => $this->pendingUnitRecipients($recipients, $user));
+            })->orWhere(function (Builder $authorization) use ($user): void {
+                $authorization->where('general_status', DocumentStatus::DRAFT->value)
+                    ->where('authorization_status', OutgoingAuthorizationStatus::PENDING->value)
+                    ->where('origin_unit_id', $user->organizational_unit_id);
+            });
+        });
 
         return true;
     }
@@ -141,6 +150,14 @@ class DocumentWorkQueryService
                             && ! $this->delegations->can($user, PermissionName::DOCUMENTS_VERSION, (int) $user->organizational_unit_id)) {
                             $returned->where('created_by', $user->getKey());
                         }
+                    });
+                }
+
+                if ($user->isResponsibleForUnit((int) $user->organizational_unit_id)) {
+                    $attention->orWhere(function (Builder $authorization) use ($user): void {
+                        $authorization->where('general_status', DocumentStatus::DRAFT->value)
+                            ->where('authorization_status', OutgoingAuthorizationStatus::PENDING->value)
+                            ->where('origin_unit_id', $user->organizational_unit_id);
                     });
                 }
             });

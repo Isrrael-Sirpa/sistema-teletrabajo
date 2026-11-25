@@ -95,6 +95,7 @@ class DocumentController extends Controller
             'creator',
             'authorizationRequester',
             'authorizer',
+            'correlativeReserver.organizationalUnit',
             'annuller',
             'recipients' => fn ($recipients) => $recipients->when(
                 $taskOnly,
@@ -229,7 +230,7 @@ class DocumentController extends Controller
         Gate::authorize('update', $document);
 
         return view('documents.edit', [
-            ...$this->formData($request),
+            ...$this->formData($request, $document),
             'document' => $document,
         ]);
     }
@@ -252,14 +253,23 @@ class DocumentController extends Controller
     }
 
     /** @return array<string, mixed> */
-    private function formData(Request $request): array
+    private function formData(Request $request, ?Document $editingDocument = null): array
     {
         $user = $request->user();
         $canSelectOrigin = $user->hasInstitutionalGlobalScope();
+        $documentTypes = DocumentType::query()->availableForNewDocuments()
+            ->where(function ($query) use ($editingDocument): void {
+                $query->where('uses_correlative', false);
+
+                if ($editingDocument) {
+                    $query->orWhereKey($editingDocument->document_type_id);
+                }
+            });
 
         return [
-            'documentTypes' => DocumentType::query()->availableForNewDocuments()->get(),
+            'documentTypes' => $documentTypes->get(),
             'selectedDocumentTypeId' => DocumentType::query()->availableForNewDocuments()
+                ->where('uses_correlative', false)
                 ->where('public_id', $request->query('document_type'))
                 ->value('id'),
             'originUnits' => $canSelectOrigin

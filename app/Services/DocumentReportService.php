@@ -30,11 +30,12 @@ class DocumentReportService
     {
         $query = $this->search->query($user, Arr::except($filters, [
             'report', 'period_from', 'period_to', 'page',
-        ]), includeTasks: false);
+        ]));
 
-        $this->applyReport($query, (string) ($filters['report'] ?? 'summary'));
+        $this->applyReport($query, $user, (string) ($filters['report'] ?? 'summary'));
         $this->applyPeriod(
             $query,
+            $user,
             (string) ($filters['report'] ?? 'summary'),
             $filters['period_from'] ?? null,
             $filters['period_to'] ?? null,
@@ -155,11 +156,15 @@ class DocumentReportService
     }
 
     /** @param Builder<Document> $query */
-    private function applyReport(Builder $query, string $report): void
+    private function applyReport(Builder $query, User $user, string $report): void
     {
+        $unitId = $user->hasInstitutionalGlobalScope() ? null : $user->organizational_unit_id;
+
         match ($report) {
-            'sent' => $query->whereNotNull('sent_at'),
-            'received' => $query->whereHas('recipients', fn (Builder $recipients) => $recipients->whereNotNull('received_at')),
+            'sent' => $query->whereNotNull('sent_at')->when($unitId, fn (Builder $documents) => $documents->where('origin_unit_id', $unitId)),
+            'received' => $query->whereHas('recipients', fn (Builder $recipients) => $recipients
+                ->whereNotNull('received_at')
+                ->when($unitId, fn (Builder $destinations) => $destinations->where('unit_id', $unitId))),
             'approved' => $query->where('general_status', DocumentStatus::APPROVED->value),
             'returned' => $query->where('general_status', DocumentStatus::RETURNED->value),
             'rejected' => $query->where('general_status', DocumentStatus::REJECTED->value),
@@ -170,15 +175,19 @@ class DocumentReportService
     }
 
     /** @param Builder<Document> $query */
-    private function applyPeriod(Builder $query, string $report, mixed $from, mixed $to): void
+    private function applyPeriod(Builder $query, User $user, string $report, mixed $from, mixed $to): void
     {
         if (! filled($from) && ! filled($to)) {
             return;
         }
 
         if ($report === 'received') {
-            $query->whereHas('recipients', function (Builder $recipients) use ($from, $to): void {
+            $unitId = $user->hasInstitutionalGlobalScope() ? null : $user->organizational_unit_id;
+            $query->whereHas('recipients', function (Builder $recipients) use ($from, $to, $unitId): void {
                 $recipients->whereNotNull('received_at');
+                if ($unitId) {
+                    $recipients->where('unit_id', $unitId);
+                }
                 $this->dateRange($recipients, 'received_at', $from, $to);
             });
 

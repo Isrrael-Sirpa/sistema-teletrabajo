@@ -11,7 +11,6 @@ use App\Enums\OrganizationalUnitType;
 use App\Enums\OutgoingAuthorizationStatus;
 use App\Events\DocumentNotificationRequested;
 use App\Models\Document;
-use App\Models\DocumentCounter;
 use App\Models\DocumentRecipient;
 use App\Models\DocumentReviewTask;
 use App\Models\User;
@@ -66,8 +65,7 @@ class DocumentWorkflowService
             );
 
             $sentAt = now();
-            $number = $this->nextNumber($locked->origin_unit_id, $locked->document_type_id, $sentAt->year);
-            $code = $this->formatCode($locked, $sentAt->year, $number);
+            $code = $locked->documentType->uses_correlative ? $locked->code : null;
 
             DocumentRecipient::query()
                 ->whereKey($recipients->modelKeys())
@@ -124,7 +122,7 @@ class DocumentWorkflowService
 
     public function previewCode(Document $document): ?string
     {
-        return $this->formatCode($document, now()->year, null, strict: false);
+        return $document->code;
     }
 
     public function requestAuthorization(User $actor, Document $document, int $expectedVersion): Document
@@ -515,11 +513,15 @@ class DocumentWorkflowService
 
     private function validateForSending(Document $document): void
     {
-        if ($document->general_status !== DocumentStatus::DRAFT
-            || $document->code !== null
-            || $document->sent_at !== null) {
+        if ($document->general_status !== DocumentStatus::DRAFT || $document->sent_at !== null) {
             throw ValidationException::withMessages([
                 'document' => 'El documento ya no es un borrador disponible para envío.',
+            ]);
+        }
+
+        if ($document->documentType->uses_correlative && ($document->code === null || $document->correlative_number === null)) {
+            throw ValidationException::withMessages([
+                'document' => 'Reserve el cite desde Control de correlativos antes de enviar este tipo documental.',
             ]);
         }
 
@@ -534,29 +536,6 @@ class DocumentWorkflowService
                 'document' => 'El documento no tiene un origen activo o un asunto válido.',
             ]);
         }
-    }
-
-    private function nextNumber(int $originUnitId, int $documentTypeId, int $year): int
-    {
-        DocumentCounter::query()->insertOrIgnore([
-            'origin_unit_id' => null,
-            'document_type_id' => $documentTypeId,
-            'year' => $year,
-            'last_number' => 0,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-
-        $counter = DocumentCounter::query()
-            ->where('document_type_id', $documentTypeId)
-            ->where('year', $year)
-            ->lockForUpdate()
-            ->sole();
-
-        $counter->last_number++;
-        $counter->save();
-
-        return $counter->last_number;
     }
 
     private function formatCode(Document $document, int $year, ?int $number, bool $strict = true): ?string
