@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Enums\PermissionName;
+use App\Enums\OrganizationalUnitType;
 use App\Models\OrganizationalUnit;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Str;
@@ -21,6 +22,8 @@ class StoreCareerRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'type' => ['required', 'in:'.implode(',', array_map(fn (OrganizationalUnitType $type) => $type->value, array_filter(OrganizationalUnitType::cases(), fn (OrganizationalUnitType $type) => $type !== OrganizationalUnitType::FACULTY)))],
+            'parent_id' => ['required', 'integer', 'exists:unidades_organizacionales,id'],
             'name' => ['required', 'string', 'max:160'],
             'acronym' => ['required', 'string', 'max:20', 'regex:/^[\pL\pN][\pL\pN .&\/-]*$/u'],
             'description' => ['nullable', 'string', 'max:2000'],
@@ -49,9 +52,12 @@ class StoreCareerRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'name.required' => 'Ingrese el nombre de la carrera.',
+            'name.required' => 'Ingrese el nombre de la unidad.',
+            'type.required' => 'Seleccione el tipo de unidad.',
+            'parent_id.required' => 'Seleccione la unidad de la que depende.',
+            'parent_id.exists' => 'La unidad superior seleccionada no existe.',
             'name.max' => 'El nombre no puede superar los 160 caracteres.',
-            'acronym.required' => 'Ingrese la sigla de la carrera.',
+            'acronym.required' => 'Ingrese la sigla de la unidad.',
             'acronym.max' => 'La sigla no puede superar los 20 caracteres.',
             'acronym.regex' => 'La sigla contiene caracteres no permitidos.',
             'description.max' => 'La descripción no puede superar los 2000 caracteres.',
@@ -63,6 +69,9 @@ class StoreCareerRequest extends FormRequest
         $description = $this->input('description');
 
         $this->merge([
+            'type' => $this->input('type', OrganizationalUnitType::CAREER->value),
+            'parent_id' => $this->input('parent_id') ?? OrganizationalUnit::query()
+                ->where('type', OrganizationalUnitType::FACULTY->value)->value('id'),
             'name' => Str::squish((string) $this->input('name')),
             'acronym' => Str::upper(Str::squish((string) $this->input('acronym'))),
             'description' => filled($description) ? trim((string) $description) : null,

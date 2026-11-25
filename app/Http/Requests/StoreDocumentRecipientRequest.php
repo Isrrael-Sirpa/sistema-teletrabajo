@@ -30,10 +30,7 @@ class StoreDocumentRecipientRequest extends FormRequest
                 'required_if:recipient_type,unit',
                 'integer',
                 Rule::exists(OrganizationalUnit::class, 'id')->where(function ($query): void {
-                    $query->where('is_active', true)->whereIn('type', [
-                        OrganizationalUnitType::CAREER->value,
-                        OrganizationalUnitType::KARDEX->value,
-                    ]);
+                    $query->where('is_active', true)->where('type', '!=', OrganizationalUnitType::FACULTY->value);
                 }),
             ],
             'user_id' => [
@@ -54,7 +51,7 @@ class StoreDocumentRecipientRequest extends FormRequest
             'recipient_type.required' => 'Seleccione si enviará a una unidad o a una persona.',
             'recipient_type.in' => 'El tipo de destinatario no es válido.',
             'unit_id.required_if' => 'Seleccione una carrera o unidad.',
-            'unit_id.exists' => 'Seleccione una carrera o Kardex activo.',
+            'unit_id.exists' => 'Seleccione una unidad activa.',
             'user_id.required_if' => 'Seleccione una persona.',
             'user_id.exists' => 'Seleccione un usuario activo.',
             'requires_response.required' => 'Indique si el destinatario requiere respuesta.',

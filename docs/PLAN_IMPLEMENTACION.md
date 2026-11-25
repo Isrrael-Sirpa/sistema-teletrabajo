@@ -68,5 +68,5 @@ Cada fase termina con migraciones consistentes, autorización backend, rutas ver
 - Fase 22: anulación formal de documentos oficiales, conservación íntegra del expediente, historial, auditoría, notificaciones internas y concurrencia real implementadas y validadas en PostgreSQL el 12 de octubre de 2026.
 - Fase 23: endurecimiento de configuración, headers, errores seguros, despliegue reproducible, backups y restauración implementados, probados y documentados el 12 de octubre de 2026.
 - Fase 24: aceptación automatizada integral, regresión final, checklist de entrega y cierre técnico completados y documentados el 13 de octubre de 2026. La UAT con personal real y el despliegue definitivo permanecen como actividades operativas posteriores, no como nuevos módulos.
-- No se inició una Fase 25.
+- Fase 25: actividades de la unidad implementadas el 19 de noviembre de 2026. Amplía las revisiones internas con actividades independientes o vinculadas a correspondencia, responsables, avances, productos, observaciones y conclusión por Jefatura.
 

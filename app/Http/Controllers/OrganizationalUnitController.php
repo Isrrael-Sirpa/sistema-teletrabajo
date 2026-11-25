@@ -23,11 +23,13 @@ class OrganizationalUnitController extends Controller
         Gate::authorize('viewAny', OrganizationalUnit::class);
 
         $filters = $request->validate([
-            'type' => ['nullable', 'in:faculty,career,kardex'],
+            'type' => ['nullable', 'in:'.implode(',', array_map(fn (OrganizationalUnitType $type) => $type->value, OrganizationalUnitType::cases()))],
             'status' => ['nullable', 'in:active,inactive'],
         ]);
 
-        $query = OrganizationalUnit::query()->with('parent');
+        // La Facultad es la raíz técnica de la jerarquía, no una dependencia operativa.
+        $query = OrganizationalUnit::query()->with('parent')
+            ->where('type', '!=', OrganizationalUnitType::FACULTY->value);
 
         if (filled($filters['type'] ?? null)) {
             $query->where('type', $filters['type']);
@@ -41,7 +43,7 @@ class OrganizationalUnitController extends Controller
         $units = $query
             ->orderBy('type')
             ->orderBy('name')
-            ->paginate(15)
+            ->paginate(30)
             ->withQueryString();
 
         return view('organizational-units.index', compact('units'));
@@ -60,9 +62,9 @@ class OrganizationalUnitController extends Controller
     {
         Gate::authorize('create', OrganizationalUnit::class);
 
-        $faculty = $this->activeFaculty();
+        $parents = OrganizationalUnit::query()->active()->orderBy('name')->get();
 
-        return view('organizational-units.create', compact('faculty'));
+        return view('organizational-units.create', compact('parents'));
     }
 
     public function store(StoreCareerRequest $request): RedirectResponse
@@ -76,7 +78,7 @@ class OrganizationalUnitController extends Controller
         }
 
         return redirect()->route('units.show', $unit)
-            ->with('status', 'La carrera fue creada correctamente.');
+            ->with('status', 'La unidad fue creada correctamente.');
     }
 
     public function edit(OrganizationalUnit $unit): View
@@ -84,8 +86,9 @@ class OrganizationalUnitController extends Controller
         Gate::authorize('update', $unit);
 
         $unit->load('parent');
+        $parents = OrganizationalUnit::query()->active()->whereKeyNot($unit->id)->orderBy('name')->get();
 
-        return view('organizational-units.edit', compact('unit'));
+        return view('organizational-units.edit', compact('unit', 'parents'));
     }
 
     public function update(UpdateCareerRequest $request, OrganizationalUnit $unit): RedirectResponse
@@ -99,7 +102,7 @@ class OrganizationalUnitController extends Controller
         }
 
         return redirect()->route('units.show', $unit)
-            ->with('status', 'La carrera fue actualizada correctamente.');
+            ->with('status', 'La unidad fue actualizada correctamente.');
     }
 
     public function activate(Request $request, OrganizationalUnit $unit): RedirectResponse
@@ -107,7 +110,7 @@ class OrganizationalUnitController extends Controller
         Gate::authorize('activate', $unit);
         $this->units->setCareerActive($request->user(), $unit, true);
 
-        return back()->with('status', 'La carrera fue activada correctamente.');
+        return back()->with('status', 'La unidad fue activada correctamente.');
     }
 
     public function deactivate(Request $request, OrganizationalUnit $unit): RedirectResponse
@@ -115,14 +118,7 @@ class OrganizationalUnitController extends Controller
         Gate::authorize('deactivate', $unit);
         $this->units->setCareerActive($request->user(), $unit, false);
 
-        return back()->with('status', 'La carrera fue desactivada. Su historial permanece disponible.');
+        return back()->with('status', 'La unidad fue desactivada. Su historial permanece disponible.');
     }
 
-    private function activeFaculty(): OrganizationalUnit
-    {
-        return OrganizationalUnit::query()
-            ->where('type', OrganizationalUnitType::FACULTY->value)
-            ->active()
-            ->firstOrFail();
-    }
 }

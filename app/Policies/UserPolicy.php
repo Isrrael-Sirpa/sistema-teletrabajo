@@ -82,7 +82,9 @@ class UserPolicy
         }
 
         if ($actor->hasRole(RoleName::CO_ADMINISTRATOR->value)) {
-            return ! $target->hasRole(RoleName::ADMINISTRATOR->value);
+            return $actor->organizational_unit_id !== null
+                && $actor->organizational_unit_id === $target->organizational_unit_id
+                && $target->roleName()?->isSecondary() === true;
         }
 
         return ($actor->isResponsibleForUnit((int) $actor->organizational_unit_id)

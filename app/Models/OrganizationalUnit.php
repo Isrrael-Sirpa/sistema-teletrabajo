@@ -46,6 +46,22 @@ class OrganizationalUnit extends Model
         return $this->hasMany(self::class, 'parent_id');
     }
 
+    /** @return array<int, int> */
+    public static function descendantIdsFor(int $unitId): array
+    {
+        $ids = [$unitId];
+        $pending = [$unitId];
+
+        while ($pending !== []) {
+            $children = static::query()->whereIn('parent_id', $pending)->pluck('id')
+                ->map(static fn ($id): int => (int) $id)->all();
+            $pending = array_values(array_diff($children, $ids));
+            $ids = [...$ids, ...$pending];
+        }
+
+        return $ids;
+    }
+
     /**
      * @param  Builder<OrganizationalUnit>  $query
      */
@@ -67,10 +83,7 @@ class OrganizationalUnit extends Model
      */
     public function scopeAvailableAsDocumentDestination(Builder $query): void
     {
-        $query->active()->whereIn('type', [
-            OrganizationalUnitType::CAREER->value,
-            OrganizationalUnitType::KARDEX->value,
-        ]);
+        $query->active()->where('type', '!=', OrganizationalUnitType::FACULTY->value);
     }
 
     /**

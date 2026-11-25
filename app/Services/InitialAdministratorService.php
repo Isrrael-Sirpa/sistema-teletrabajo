@@ -6,6 +6,7 @@ use App\Enums\AuditAction;
 use App\Enums\RoleName;
 use App\Enums\UserStatus;
 use App\Models\Role;
+use App\Models\OrganizationalUnit;
 use App\Models\User;
 use App\Support\InstitutionalPassword;
 use DomainException;
@@ -79,12 +80,19 @@ class InitialAdministratorService
                 ]);
             }
 
+            $computingDepartment = OrganizationalUnit::query()
+                ->where('acronym', 'DCOMP')->where('is_active', true)->first();
+
+            if (! $computingDepartment) {
+                throw new DomainException('No existe el Departamento de Computación activo. Ejecute primero los seeders institucionales.');
+            }
+
             $administrator = User::query()->create([
                 'name' => $validated['name'],
                 'email' => $validated['email'],
                 'password' => $validated['password'],
                 'status' => UserStatus::ACTIVE,
-                'organizational_unit_id' => null,
+                'organizational_unit_id' => $computingDepartment->id,
             ]);
             $administrator->syncRoles([RoleName::ADMINISTRATOR->value]);
 
@@ -94,7 +102,7 @@ class InitialAdministratorService
                 'email' => $administrator->email,
                 'status' => $administrator->status,
                 'role' => RoleName::ADMINISTRATOR,
-                'organizational_unit_id' => null,
+                'organizational_unit_id' => $computingDepartment->id,
                 'source' => 'initial_bootstrap',
             ]);
 

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\ActivityStatus;
 use App\Enums\DocumentConfidentiality;
 use App\Enums\DocumentPriority;
 use App\Enums\DocumentRecipientStatus;
@@ -98,6 +99,11 @@ class Document extends Model
         return $this->hasMany(DocumentAccessGrant::class);
     }
 
+    public function workActivities(): HasMany
+    {
+        return $this->hasMany(WorkActivity::class);
+    }
+
     /** @param Builder<Document> $query */
     public function scopeVisibleTo(
         Builder $query,
@@ -160,6 +166,12 @@ class Document extends Model
 
             if ($includeTasks && DocumentReviewTask::canBeAssignedTo($user)) {
                 $visibility->orWhereHas('recipients.reviewTasks', fn (Builder $tasks) => $tasks->assignedTo($user));
+            }
+
+            if ($includeTasks && $user->can(PermissionName::ACTIVITIES_VIEW->value)) {
+                $visibility->orWhereHas('workActivities', fn (Builder $activities) => $activities
+                    ->whereNotIn('status', [ActivityStatus::COMPLETED->value, ActivityStatus::CANCELLED->value])
+                    ->whereHas('assignees', fn (Builder $assignees) => $assignees->whereKey($user->getKey())));
             }
 
             if ($includeGrants) {

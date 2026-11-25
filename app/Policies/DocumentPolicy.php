@@ -2,6 +2,7 @@
 
 namespace App\Policies;
 
+use App\Enums\ActivityStatus;
 use App\Enums\DocumentRecipientStatus;
 use App\Enums\DocumentStatus;
 use App\Enums\OutgoingAuthorizationStatus;
@@ -112,6 +113,10 @@ class DocumentPolicy
             ->exists()
             || $document->reviewVersionIdsFor($user)
                 ->when($file, fn ($versions) => $versions->where('document_version_id', $file->document_version_id))
+                ->exists()
+            || $document->workActivities()
+                ->whereNotIn('status', [ActivityStatus::COMPLETED->value, ActivityStatus::CANCELLED->value])
+                ->whereHas('assignees', fn ($assignees) => $assignees->whereKey($user->getKey()))
                 ->exists();
     }
 

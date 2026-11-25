@@ -15,7 +15,6 @@ use App\Models\DocumentRecipient;
 use App\Models\DocumentReviewTask;
 use App\Models\DocumentType;
 use App\Models\OrganizationalUnit;
-use App\Models\User;
 use App\Services\DocumentAccessGrantService;
 use App\Services\DocumentDeadlineService;
 use App\Services\DocumentDraftService;
@@ -69,16 +68,6 @@ class DocumentController extends Controller
                         ->whereIn('document_id', $visibleDocuments()->select((new Document)->qualifyColumn('id'))));
             })
             ->orderBy('name')->get();
-        $people = User::query()->with('organizationalUnit')
-            ->where(function ($query) use ($visibleDocuments): void {
-                $query->whereIn('id', $visibleDocuments()->select('created_by'))
-                    ->orWhereIn('id', $visibleDocuments()->whereNotNull('sender_user_id')->select('sender_user_id'))
-                    ->orWhereIn('id', DocumentRecipient::query()
-                        ->whereNotNull('user_id')
-                        ->select('user_id')
-                        ->whereIn('document_id', $visibleDocuments()->select((new Document)->qualifyColumn('id'))));
-            })
-            ->orderBy('name')->get();
         $documentTypes = DocumentType::query()
             ->whereIn('id', $visibleDocuments()->select('document_type_id'))
             ->orderBy('name')->get();
@@ -90,7 +79,6 @@ class DocumentController extends Controller
             'workFilterLabel',
             'deadlineStatuses',
             'units',
-            'people',
             'documentTypes',
         ));
     }
@@ -158,6 +146,7 @@ class DocumentController extends Controller
         if ($canManageRecipients) {
             $recipientUnits = OrganizationalUnit::query()
                 ->availableAsDocumentDestination()
+                ->whereKeyNot($document->origin_unit_id)
                 ->orderBy('type')
                 ->orderBy('name')
                 ->get();
@@ -277,6 +266,7 @@ class DocumentController extends Controller
                 ? OrganizationalUnit::query()->active()->orderBy('type')->orderBy('name')->get()
                 : collect(),
             'fixedOrigin' => $canSelectOrigin ? null : $user->organizationalUnit,
+            'defaultOriginId' => $canSelectOrigin ? $user->organizational_unit_id : null,
             'canSelectOrigin' => $canSelectOrigin,
             'priorities' => DocumentPriority::cases(),
             'confidentialities' => DocumentConfidentiality::cases(),

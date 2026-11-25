@@ -2,10 +2,9 @@
     <section id="revisiones" tabindex="-1" class="ft-card mt-6 scroll-mt-24 p-5 sm:p-7" aria-labelledby="reviews-title">
         <div class="flex flex-wrap items-start justify-between gap-3">
             <div>
-                <h2 id="reviews-title" class="text-lg font-bold text-slate-950">{{ $isUnitResponsible ? 'Revisiones internas de su unidad' : 'Mis tareas en este documento' }}</h2>
+                <h2 id="reviews-title" class="text-lg font-bold text-slate-950">{{ $isUnitResponsible ? 'Revisiones internas de su unidad' : 'Revisiones asignadas en este documento' }}</h2>
                 <p class="mt-1 text-sm text-slate-600">El responsable de la unidad consulta las recomendaciones y registra la respuesta oficial por separado.</p>
             </div>
-            <a href="{{ route($isUnitResponsible ? 'reviews.unit' : 'reviews.mine') }}" class="ft-button-secondary">{{ $isUnitResponsible ? 'Ver tablero de mi unidad' : 'Ver Mis tareas' }}</a>
         </div>
 
         @if ($isUnitResponsible && $ownRecipient && in_array($summaryAction, ['start_review', 'approve'], true))

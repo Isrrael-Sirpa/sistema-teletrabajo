@@ -58,6 +58,9 @@
             <p class="mt-3 text-sm text-slate-600">{{ $document->documentType->name }} · Origen: {{ $document->originUnit->name }} · Creado el {{ $document->created_at->format('d/m/Y') }} · Límite: {{ $document->due_at?->timezone(config('app.timezone'))->format('d/m/Y') ?? 'sin fecha' }}</p>
         </div>
         <div class="flex flex-wrap gap-2">
+            @can('create', App\Models\WorkActivity::class)
+                <a href="{{ route('activities.create', ['document' => $document->public_id]) }}" class="ft-button-secondary">Asignar actividad vinculada</a>
+            @endcan
             @can('update', $document)
                 <a href="{{ route('documents.edit', $document) }}" class="ft-button-primary">Editar borrador</a>
             @endcan
@@ -180,7 +183,7 @@
                     <a href="#files-title" data-file-viewer-open="{{ $documentFiles->first()->public_id }}" aria-haspopup="dialog" class="ft-button-secondary">Visualizar archivos</a>
                 @endif
                 @if ($summaryAction)
-                    <form id="destino-{{ $ownRecipient->id }}" tabindex="-1" class="scroll-mt-24" method="POST" action="{{ route('documents.recipients.transition', [$document, $ownRecipient, $summaryAction]) }}" @if ($summaryAction === 'approve') onsubmit="return confirm('¿Desea aprobar este documento? La decisión quedará registrada en el historial.');" @endif>
+                    <form id="destino-{{ $ownRecipient->id }}" tabindex="-1" class="scroll-mt-24" method="POST" action="{{ route('documents.recipients.transition', [$document, $ownRecipient, $summaryAction]) }}" @if ($summaryAction === 'approve') data-confirm-title="Aprobar documento" data-confirm-message="La decisión quedará registrada en el historial." @endif>
                         @csrf
                         @method('PATCH')
                         <input type="hidden" name="document_lock_version" value="{{ $document->lock_version }}">
@@ -381,7 +384,7 @@
                                 <td role="cell" data-label="Acciones" class="px-4 py-4 text-right">
                                     <div class="flex flex-col items-end gap-2">
                                     @if ($canManageRecipients)
-                                        <form method="POST" action="{{ route('documents.recipients.destroy', $document) }}" data-recipient-operation="remove" onsubmit="return confirm('¿Quitar este destinatario del borrador?');">
+                                        <form method="POST" action="{{ route('documents.recipients.destroy', $document) }}" data-recipient-operation="remove" data-confirm-title="Quitar destinatario" data-confirm-message="Se retirará del borrador.">
                                             @csrf
                                             @method('DELETE')
                                             <input type="hidden" name="recipient_id" value="{{ $recipient->id }}">
@@ -411,7 +414,7 @@
                                     @endcan
 
                                     @can('approveRecipient', [$document, $recipient])
-                                        <form method="POST" action="{{ route('documents.recipients.transition', [$document, $recipient, 'approve']) }}" onsubmit="return confirm('¿Desea aprobar este documento para el destinatario indicado? La decisión quedará registrada en el historial.');">
+                                        <form method="POST" action="{{ route('documents.recipients.transition', [$document, $recipient, 'approve']) }}" data-confirm-title="Aprobar documento" data-confirm-message="La decisión quedará registrada en el historial.">
                                             @csrf
                                             @method('PATCH')
                                             <input type="hidden" name="document_lock_version" value="{{ $document->lock_version }}">
@@ -564,7 +567,7 @@
                         <p class="mt-1 text-sm leading-6 text-emerald-900">Revise los {{ $pendingCorrectionVersion->files->count() }} archivos en el historial de versiones. Solo al enviar la corrección volverán al flujo los destinatarios que devolvieron el documento.</p>
 
                         @can('sendCorrection', $document)
-                            <form method="POST" action="{{ route('documents.correction.send', $document) }}" class="mt-4" onsubmit="return confirm('¿Confirma el envío de esta corrección? Los destinatarios devueltos volverán al estado Enviado.');">
+                            <form method="POST" action="{{ route('documents.correction.send', $document) }}" class="mt-4" data-confirm-title="Enviar corrección" data-confirm-message="Los destinatarios devueltos volverán al estado Enviado.">
                                 @csrf
                                 <input type="hidden" name="document_lock_version" value="{{ $document->lock_version }}">
                                 <button type="submit" class="ft-button-primary">Enviar corrección</button>
@@ -633,7 +636,7 @@
                             <div class="flex flex-wrap gap-2">
                                 @include('documents.partials.file-actions', ['file' => $file])
                                 @if ($canManageFiles)
-                                    <form method="POST" action="{{ route('documents.files.destroy', [$document, $file]) }}" onsubmit="return confirm('¿Retirar este archivo del borrador?');">
+                                    <form method="POST" action="{{ route('documents.files.destroy', [$document, $file]) }}" data-confirm-title="Retirar archivo" data-confirm-message="El archivo se retirará del borrador.">
                                         @csrf
                                         @method('DELETE')
                                         <input type="hidden" name="lock_version" value="{{ $document->lock_version }}">
@@ -650,7 +653,7 @@
         @endforelse
 
         @if ($canManageFiles)
-            <form method="POST" action="{{ route('documents.files.store', $document) }}" enctype="multipart/form-data" class="mt-6 border-t border-slate-200 pt-6" data-submit-label="Adjuntando archivos…">
+            <form method="POST" action="{{ route('documents.files.store', $document) }}" enctype="multipart/form-data" class="mt-6 border-t border-slate-200 pt-6" data-submit-label="Subiendo archivos…" data-return-anchor="files-title">
                 @csrf
                 <input type="hidden" name="lock_version" value="{{ $document->lock_version }}">
                 <label for="document_files" class="block text-sm font-bold text-slate-800">Seleccionar archivos</label>
@@ -670,7 +673,7 @@
                     Si la carga falla, seleccione los archivos nuevamente antes de reintentar.
                 </p>
                 @if ($errors->has('files') || $errors->has('files.*'))<p id="document-files-error" class="ft-field-error">{{ $errors->first('files') ?: $errors->first('files.*') }}</p>@endif
-                <button type="submit" class="ft-button-primary mt-4">Adjuntar archivos</button>
+                <button type="submit" class="ft-button-primary mt-4">Subir archivos</button>
             </form>
         @endif
     @if ($isDraft)
@@ -727,7 +730,7 @@
                                     </div>
                                 </form>
 
-                                <form method="POST" action="{{ route('documents.access-grants.destroy', [$document, $grant]) }}" class="rounded-lg border border-red-200 bg-red-50 p-3" onsubmit="return confirm('¿Confirma que desea revocar este acceso?');">
+                                <form method="POST" action="{{ route('documents.access-grants.destroy', [$document, $grant]) }}" class="rounded-lg border border-red-200 bg-red-50 p-3" data-confirm-title="Revocar acceso" data-confirm-message="La persona dejará de tener acceso al documento.">
                                     @csrf
                                     @method('DELETE')
                                     <label for="revocation_reason_{{ $grant->id }}" class="block text-xs font-bold text-red-900">Motivo de revocación</label>
@@ -861,7 +864,7 @@
             </div>
             <div data-recipient-send-controls>
             <a href="{{ route('documents.edit', $document) }}" class="ft-button-secondary mt-4">Volver y corregir</a>
-            <form method="POST" action="{{ route('documents.send', $document) }}" class="mt-5" onsubmit="return confirm('¿Confirma el envío oficial de este documento? Se asignará un código y ya no podrá modificar destinatarios ni archivos.');">
+            <form method="POST" action="{{ route('documents.send', $document) }}" class="mt-5" data-confirm-title="Enviar documento" data-confirm-message="Se asignará un código oficial y ya no podrá modificar destinatarios ni archivos.">
                 @csrf
                 <input type="hidden" name="document_lock_version" value="{{ $document->lock_version }}">
                 <button type="submit" @disabled($document->recipients->isEmpty()) class="ft-button-primary">Enviar documento</button>
@@ -882,7 +885,7 @@
                 <div><dt class="font-bold text-red-950">Código oficial</dt><dd class="text-red-900">{{ $document->code }}</dd></div>
                 <div><dt class="font-bold text-red-950">Estado actual</dt><dd class="text-red-900">{{ $document->general_status->label() }}</dd></div>
             </dl>
-            <form method="POST" action="{{ route('documents.annul', $document) }}" class="mt-5" onsubmit="return confirm('¿Desea anular este documento? Quedará sin efecto institucional y no podrá deshacerse. El expediente y su historial permanecerán conservados.');">
+            <form method="POST" action="{{ route('documents.annul', $document) }}" class="mt-5" data-confirm-title="Anular documento" data-confirm-message="Quedará sin efecto institucional. El expediente y su historial se conservarán.">
                 @csrf
                 <input type="hidden" name="document_lock_version" value="{{ $document->lock_version }}">
                 <label for="annulment_reason" class="block text-sm font-bold text-red-950">Motivo obligatorio</label>
@@ -964,7 +967,7 @@
         <section class="mt-6 rounded-2xl border border-red-200 bg-red-50 p-5" aria-labelledby="discard-title">
             <h2 id="discard-title" class="font-bold text-red-950">Descartar borrador</h2>
             <p class="mt-2 text-sm leading-6 text-red-900">Esta acción retira el borrador de los listados normales, siempre que nunca haya sido enviado y no tenga información relacionada. Su trazabilidad se conserva.</p>
-            <form method="POST" action="{{ route('documents.discard', $document) }}" class="mt-4" onsubmit="return confirm('¿Confirma que desea descartar este borrador? Esta acción no se puede deshacer.');">
+            <form method="POST" action="{{ route('documents.discard', $document) }}" class="mt-4" data-confirm-title="Descartar borrador" data-confirm-message="El borrador dejará de aparecer en los listados normales.">
                 @csrf
                 @method('DELETE')
                 <button type="submit" class="inline-flex min-h-11 items-center justify-center rounded-lg bg-red-700 px-4 py-2.5 text-sm font-bold text-white hover:bg-red-800">Descartar borrador</button>

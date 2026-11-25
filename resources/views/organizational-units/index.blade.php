@@ -4,13 +4,13 @@
             <p class="ft-eyebrow">Administración institucional</p>
             <h1 class="ft-page-title">Carreras y unidades</h1>
             <p class="ft-page-description">
-                La Facultad y Kardex son unidades protegidas. Las carreras pueden agregarse, actualizarse y desactivarse sin eliminar su historial.
+                Administre las dependencias operativas de la Facultad. La Facultad solo es la raíz institucional y no se muestra como una unidad de trabajo.
             </p>
         </div>
 
         @can('create', App\Models\OrganizationalUnit::class)
             <a href="{{ route('units.create') }}" class="ft-button-primary shrink-0">
-                Agregar carrera
+                Agregar unidad
             </a>
         @endcan
     </div>
@@ -22,7 +22,9 @@
                 <select id="type" name="type" class="mt-2 block w-full bg-white px-3 py-2 text-sm">
                     <option value="">Todas las unidades</option>
                     @foreach (App\Enums\OrganizationalUnitType::cases() as $type)
-                        <option value="{{ $type->value }}" @selected(request('type') === $type->value)>{{ $type->label() }}</option>
+                        @if ($type !== App\Enums\OrganizationalUnitType::FACULTY)
+                            <option value="{{ $type->value }}" @selected(request('type') === $type->value)>{{ $type->label() }}</option>
+                        @endif
                     @endforeach
                 </select>
             </div>

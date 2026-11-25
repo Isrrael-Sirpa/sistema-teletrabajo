@@ -47,9 +47,66 @@ export function mountPasswordToggle(button, input) {
         const reveal = input.type === 'password';
         input.type = reveal ? 'text' : 'password';
         button.setAttribute('aria-pressed', String(reveal));
-        button.textContent = reveal ? 'Ocultar' : 'Mostrar';
+        const visibleEye = typeof button.querySelector === 'function'
+            ? button.querySelector('[data-password-eye-visible]')
+            : null;
+        const hiddenEye = typeof button.querySelector === 'function'
+            ? button.querySelector('[data-password-eye-hidden]')
+            : null;
+        visibleEye?.toggleAttribute('hidden', reveal);
+        hiddenEye?.toggleAttribute('hidden', !reveal);
         button.setAttribute('aria-label', reveal ? 'Ocultar contraseña' : 'Mostrar contraseña');
     });
+}
+
+export function mountUserRoleUnits(form) {
+    const role = form.querySelector('[data-role-select]');
+    const unit = form.querySelector('[data-unit-select]');
+    const section = form.querySelector('[data-unit-section]');
+    const fixedUnit = form.querySelector('[data-fixed-unit]');
+    const fixedUnitInput = form.querySelector('[data-fixed-unit-input]');
+    if (! role || ! unit || ! section || ! fixedUnit || ! fixedUnitInput) return;
+
+    const accepts = (option) => {
+        if (! option.value) return true;
+        if (role.value === 'administrator') return option.dataset.unitType === 'department' && option.dataset.unitAcronym === 'DCOMP';
+        if (role.value === 'co_administrator') return ['dean_office', 'vice_dean_office'].includes(option.dataset.unitType);
+        if (role.value === 'career_head') return ! ['faculty', 'dean_office', 'vice_dean_office'].includes(option.dataset.unitType);
+        if (role.value === 'extra') return option.dataset.unitType === 'career';
+        return role.value !== 'kardex_head' && option.dataset.unitType !== 'faculty';
+    };
+    const sync = () => {
+        const hasRole = role.value !== '';
+        const administrator = role.value === 'administrator';
+        section.hidden = ! hasRole;
+        fixedUnit.hidden = !administrator;
+        unit.hidden = administrator;
+        unit.disabled = !hasRole || administrator;
+        unit.required = hasRole && !administrator;
+        fixedUnitInput.disabled = !administrator;
+        const available = [...unit.options].filter((option) => option.value && accepts(option));
+        [...unit.options].forEach((option) => {
+            option.hidden = ! accepts(option);
+            option.disabled = ! accepts(option);
+            if (option.dataset.defaultLabel) option.textContent = option.dataset.defaultLabel;
+            if (role.value === 'co_administrator' && option.value) option.textContent = option.dataset.unitType === 'dean_office' ? 'Decanato' : 'Vicedecanato';
+        });
+        const prompt = unit.options[0];
+        if (prompt) {
+            prompt.textContent = {
+                co_administrator: 'Seleccione una unidad',
+                career_head: 'Seleccione la unidad',
+                extra: 'Seleccione la carrera',
+            }[role.value] || 'Seleccione la unidad';
+        }
+        if (unit.selectedOptions[0]?.disabled) unit.value = '';
+        if (administrator && available.length === 1) {
+            unit.value = available[0].value;
+            fixedUnitInput.value = available[0].value;
+        }
+    };
+    role.addEventListener('change', sync);
+    sync();
 }
 
 export function mountSidebar(root, viewport) {
@@ -125,6 +182,7 @@ if (typeof document !== 'undefined') document.addEventListener('DOMContentLoaded
         const input = document.getElementById(button.getAttribute('aria-controls'));
         if (input) mountPasswordToggle(button, input);
     });
+    document.querySelectorAll('[data-user-form]').forEach(mountUserRoleUnits);
 
     const errors = document.querySelector('[data-form-errors]');
     if (errors) {

@@ -24,12 +24,18 @@
 
             <div class="mt-5">
                 <label for="password" class="block text-sm font-semibold text-slate-800">Nueva contraseña</label>
-                <input id="password" name="password" type="password" required minlength="12" autocomplete="new-password" aria-invalid="{{ $errors->has('password') ? 'true' : 'false' }}" aria-describedby="password-help{{ $errors->has('password') ? ' password-error' : '' }}" class="mt-2 block min-h-12 w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-base text-slate-950 shadow-sm focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20">
+                <div class="relative mt-2">
+                    <input id="password" name="password" type="password" required minlength="12" autocomplete="new-password" aria-invalid="{{ $errors->has('password') ? 'true' : 'false' }}" aria-describedby="password-help{{ $errors->has('password') ? ' password-error' : '' }}" class="block min-h-12 w-full rounded-lg border border-slate-300 bg-white py-2.5 pl-3.5 pr-12 text-base text-slate-950 shadow-sm focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20">
+                    <button type="button" data-password-toggle aria-controls="password" aria-label="Mostrar contraseña" aria-pressed="false" class="absolute inset-y-0 right-0 grid w-12 place-items-center text-slate-600 hover:text-[var(--ft-primary)] focus:outline-none focus:ring-2 focus:ring-blue-600" hidden><span data-password-eye-visible><x-ui.icon name="eye" /></span><span data-password-eye-hidden hidden><x-ui.icon name="eye-off" /></span></button>
+                </div>
                 @error('password')<p id="password-error" class="ft-field-error">{{ $message }}</p>@enderror
             </div>
             <div class="mt-5">
                 <label for="password_confirmation" class="block text-sm font-semibold text-slate-800">Confirmar nueva contraseña</label>
-                <input id="password_confirmation" name="password_confirmation" type="password" required minlength="12" autocomplete="new-password" aria-invalid="{{ $errors->has('password_confirmation') ? 'true' : 'false' }}" @error('password_confirmation') aria-describedby="password-confirmation-error" @enderror class="mt-2 block min-h-12 w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-base text-slate-950 shadow-sm focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20">
+                <div class="relative mt-2">
+                    <input id="password_confirmation" name="password_confirmation" type="password" required minlength="12" autocomplete="new-password" aria-invalid="{{ $errors->has('password_confirmation') ? 'true' : 'false' }}" @error('password_confirmation') aria-describedby="password-confirmation-error" @enderror class="block min-h-12 w-full rounded-lg border border-slate-300 bg-white py-2.5 pl-3.5 pr-12 text-base text-slate-950 shadow-sm focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20">
+                    <button type="button" data-password-toggle aria-controls="password_confirmation" aria-label="Mostrar contraseña" aria-pressed="false" class="absolute inset-y-0 right-0 grid w-12 place-items-center text-slate-600 hover:text-[var(--ft-primary)] focus:outline-none focus:ring-2 focus:ring-blue-600" hidden><span data-password-eye-visible><x-ui.icon name="eye" /></span><span data-password-eye-hidden hidden><x-ui.icon name="eye-off" /></span></button>
+                </div>
                 @error('password_confirmation')<p id="password-confirmation-error" class="ft-field-error">{{ $message }}</p>@enderror
             </div>
 

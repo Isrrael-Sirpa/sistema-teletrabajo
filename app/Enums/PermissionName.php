@@ -52,6 +52,13 @@ enum PermissionName: string
     case DELEGATIONS_MANAGE_GLOBAL = 'delegations.manage_global';
     case DELEGATIONS_MANAGE_UNIT = 'delegations.manage_unit';
 
+    case ACTIVITIES_VIEW = 'activities.view';
+    case ACTIVITIES_CREATE = 'activities.create';
+    case ACTIVITIES_PROGRESS = 'activities.progress';
+    case ACTIVITIES_SUBMIT = 'activities.submit';
+    case ACTIVITIES_REVIEW = 'activities.review';
+    case ACTIVITIES_CANCEL = 'activities.cancel';
+
     public function label(): string
     {
         return match ($this) {
@@ -97,6 +104,12 @@ enum PermissionName: string
             self::NOTIFICATIONS_SEND => 'Emitir notificaciones internas',
             self::DELEGATIONS_MANAGE_GLOBAL => 'Gestionar delegaciones globales',
             self::DELEGATIONS_MANAGE_UNIT => 'Gestionar delegaciones de unidad',
+            self::ACTIVITIES_VIEW => 'Ver actividades autorizadas',
+            self::ACTIVITIES_CREATE => 'Asignar actividades',
+            self::ACTIVITIES_PROGRESS => 'Registrar avances de actividades',
+            self::ACTIVITIES_SUBMIT => 'Presentar resultados de actividades',
+            self::ACTIVITIES_REVIEW => 'Revisar resultados de actividades',
+            self::ACTIVITIES_CANCEL => 'Cancelar actividades',
         };
     }
 }

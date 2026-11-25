@@ -44,7 +44,7 @@
                 <select id="origin_unit_id" name="origin_unit_id" required class="mt-2 block min-h-11 w-full" aria-describedby="origin-help @error('origin_unit_id') origin-error @enderror" @error('origin_unit_id') aria-invalid="true" @enderror>
                     <option value="">Seleccione una opción</option>
                     @foreach ($originUnits as $unit)
-                        <option value="{{ $unit->id }}" @selected((string) old('origin_unit_id', $document->origin_unit_id ?? '') === (string) $unit->id)>{{ $unit->name }} ({{ $unit->type->label() }})</option>
+                        <option value="{{ $unit->id }}" @selected((string) old('origin_unit_id', $document->origin_unit_id ?? $defaultOriginId ?? '') === (string) $unit->id)>{{ $unit->name }} ({{ $unit->type->label() }})</option>
                     @endforeach
                 </select>
                 <p id="origin-help" class="ft-field-help">Carrera o unidad desde la que se emitirá el documento.</p>

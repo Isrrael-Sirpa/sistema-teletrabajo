@@ -59,7 +59,7 @@ class DocumentReviewController extends Controller
         $reviews->assign($request->user(), $document, $documentRecipient, $data);
 
         return redirect()->route('documents.show', $document)->withFragment('revisiones')
-            ->with('status', 'Revisión asignada. La persona podrá verla en «Mis tareas».');
+            ->with('status', 'Revisión asignada. La persona podrá verla en «Revisiones asignadas».');
     }
 
     public function update(Request $request, Document $document, DocumentReviewTask $reviewTask, DocumentReviewService $reviews): RedirectResponse

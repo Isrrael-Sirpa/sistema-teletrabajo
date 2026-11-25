@@ -3,9 +3,7 @@
         <a href="{{ route('users.index') }}" class="ft-button-secondary mb-5">← Volver a usuarios</a>
         <header class="ft-page-header">
             <div>
-                <p class="ft-eyebrow">Gestión de usuarios</p>
                 <h1 class="ft-page-title">Crear usuario</h1>
-                <p class="ft-page-description">Registre los datos institucionales y asigne el rol y la carrera que correspondan.</p>
             </div>
         </header>
 

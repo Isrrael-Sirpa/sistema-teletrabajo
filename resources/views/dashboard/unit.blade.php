@@ -57,7 +57,7 @@
     </section>
 
     <section class="ft-card min-w-0 p-5 sm:p-6" aria-labelledby="team-tasks-title">
-        <h2 id="team-tasks-title" class="text-xl font-bold text-[var(--ft-primary)]">Tareas del equipo</h2>
+        <h2 id="team-tasks-title" class="text-xl font-bold text-[var(--ft-primary)]">Actividades del equipo</h2>
 
         @if ($teamTasks['people']->isNotEmpty())
             <dl class="mt-4 grid grid-cols-2 gap-2">

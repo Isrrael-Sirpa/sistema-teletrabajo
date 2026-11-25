@@ -17,6 +17,8 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OrganizationalUnitController;
 use App\Http\Controllers\TemporaryDelegationController;
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\WorkActivityController;
+use App\Http\Controllers\WorkActivityFileController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('guest')->group(function (): void {
@@ -68,6 +70,21 @@ Route::middleware(['auth', 'active.user'])->group(function (): void {
         ->name('notifications.read-all');
     Route::patch('/notificaciones/{notification}/leer', [NotificationController::class, 'markAsRead'])
         ->name('notifications.read');
+
+    Route::prefix('actividades')->name('activities.')->group(function (): void {
+        Route::get('/', [WorkActivityController::class, 'index'])->name('index');
+        Route::get('/asignar', [WorkActivityController::class, 'create'])->name('create');
+        Route::post('/', [WorkActivityController::class, 'store'])->name('store');
+        Route::get('/{activity}', [WorkActivityController::class, 'show'])->name('show');
+        Route::post('/{activity}/avances', [WorkActivityController::class, 'progress'])->name('progress');
+        Route::post('/{activity}/presentar', [WorkActivityController::class, 'submit'])->name('submit');
+        Route::post('/{activity}/revisar', [WorkActivityController::class, 'review'])->name('review');
+        Route::post('/{activity}/cancelar', [WorkActivityController::class, 'cancel'])->name('cancel');
+        Route::post('/{activity}/archivos', [WorkActivityFileController::class, 'store'])->name('files.store');
+        Route::get('/{activity}/archivos/{activityFile}/ver', [WorkActivityFileController::class, 'preview'])->name('files.preview');
+        Route::get('/{activity}/archivos/{activityFile}/descargar', [WorkActivityFileController::class, 'download'])->name('files.download');
+        Route::delete('/{activity}/archivos/{activityFile}', [WorkActivityFileController::class, 'destroy'])->name('files.destroy');
+    });
 
     Route::get('/mis-tareas', [DocumentReviewController::class, 'index'])->name('reviews.mine');
     Route::get('/revisiones-de-mi-unidad', [DocumentReviewController::class, 'index'])->name('reviews.unit');

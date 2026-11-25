@@ -26,6 +26,7 @@ class DocumentWorkQueryService
     {
         return match ($work) {
             'unit_pending' => $this->unitPending($query, $user),
+            'my_unit' => $this->unitDocuments($query, $user),
             'pending_receive' => $this->recipientWork($query, $user, [DocumentRecipientStatus::SENT]),
             'in_review' => $this->recipientWork($query, $user, [DocumentRecipientStatus::IN_REVIEW]),
             'decision' => $this->recipientWork(
@@ -46,10 +47,11 @@ class DocumentWorkQueryService
     {
         return match ($work) {
             'unit_pending' => 'Documentos pendientes de mi unidad',
+            'my_unit' => 'Documentos de mi unidad',
             'pending_receive' => 'Pendientes de recibir',
             'in_review' => 'En revisión',
             'decision' => 'Requieren decisión',
-            'collaboration', 'assigned' => 'Mis tareas pendientes',
+            'collaboration', 'assigned' => 'Mis revisiones pendientes',
             'returned_correction' => 'Devueltos para corregir',
             'my_drafts' => 'Mis borradores',
             'authorized' => 'Documentos autorizados',
@@ -67,6 +69,24 @@ class DocumentWorkQueryService
 
         $query->whereNotIn('general_status', [DocumentStatus::DRAFT->value, DocumentStatus::ANNULLED->value])
             ->whereHas('recipients', fn (Builder $recipients) => $this->pendingUnitRecipients($recipients, $user));
+
+        return true;
+    }
+
+    /** @param Builder<Document> $query */
+    private function unitDocuments(Builder $query, User $user): bool
+    {
+        $unitId = (int) $user->organizational_unit_id;
+        if ($unitId < 1) {
+            $query->whereRaw('1 = 0');
+
+            return true;
+        }
+
+        $query->where(function (Builder $documents) use ($unitId): void {
+            $documents->where('origin_unit_id', $unitId)
+                ->orWhereHas('recipients', fn (Builder $recipients) => $recipients->where('unit_id', $unitId));
+        });
 
         return true;
     }

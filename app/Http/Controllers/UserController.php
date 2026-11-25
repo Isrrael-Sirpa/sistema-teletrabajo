@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\AcademicTitle;
 use App\Enums\RoleName;
 use App\Enums\UserStatus;
 use App\Http\Requests\ResetUserPasswordRequest;
@@ -62,9 +63,9 @@ class UserController extends Controller
         }
 
         $users = $query->orderBy('name')->paginate(15)->withQueryString();
-        $roles = RoleName::cases();
+        $roles = array_values(array_filter(RoleName::cases(), fn (RoleName $role): bool => $role->isAssignable()));
         $statuses = UserStatus::cases();
-        $units = OrganizationalUnit::query()->whereIn('type', ['career', 'kardex'])->orderBy('name')->get();
+        $units = OrganizationalUnit::query()->availableAsDocumentDestination()->orderBy('name')->get();
 
         return view('users.index', compact('users', 'roles', 'statuses', 'units'));
     }
@@ -172,6 +173,7 @@ class UserController extends Controller
         return [
             'roles' => $this->users->allowedRolesFor($actor),
             'statuses' => UserStatus::cases(),
+            'academicTitles' => AcademicTitle::cases(),
             'units' => $units,
         ];
     }

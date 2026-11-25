@@ -48,6 +48,7 @@ class SearchDocumentsRequest extends FormRequest
             'work' => ['nullable', Rule::in([
                 'pending_receive', 'in_review', 'decision', 'collaboration',
                 'assigned', 'returned_correction', 'my_drafts', 'authorized', 'unit_pending',
+                'my_unit',
             ])],
             'page' => ['nullable', 'integer', 'min:1'],
         ];

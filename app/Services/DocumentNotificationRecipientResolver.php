@@ -34,8 +34,16 @@ class DocumentNotificationRecipientResolver
             ->values();
         $unitUsers = $unitIds->isEmpty()
             ? collect()
-            : User::query()->documentResponsibles()
+            : User::query()
+                ->where('status', UserStatus::ACTIVE->value)
                 ->whereIn('organizational_unit_id', $unitIds)
+                ->whereHas('roles', fn ($roles) => $roles->whereIn('name', [
+                    RoleName::ADMINISTRATOR->value,
+                    RoleName::CO_ADMINISTRATOR->value,
+                    RoleName::CAREER_HEAD->value,
+                    RoleName::KARDEX_HEAD->value,
+                    RoleName::SECRETARY->value,
+                ]))
                 ->get();
 
         return $personalUsers
