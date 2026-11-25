@@ -1,9 +1,8 @@
 <x-layouts.authenticated title="Notificaciones">
     <header class="ft-page-header">
         <div>
-            <p class="ft-eyebrow">Su actividad documental</p>
             <h1 class="ft-page-title">Notificaciones internas</h1>
-            <p class="ft-page-description">Revise los avisos nuevos y abra el documento para conocer el detalle o realizar la acción que corresponda.</p>
+            <p class="ft-page-description">Revise los avisos de documentos y actividades que requieren su atención.</p>
         </div>
 
         @if ($unreadNotifications->total() > 0)
@@ -15,7 +14,7 @@
         @endif
     </header>
 
-    <p class="ft-alert ft-alert-info mt-6">Marcar un aviso como leído no recibe ni aprueba el documento. Las acciones documentales se realizan dentro de su detalle, según sus permisos.</p>
+    <p class="ft-alert ft-alert-info mt-6">Marcar un aviso como leído no completa una actividad ni aprueba un documento. Abra el aviso para realizar la acción correspondiente.</p>
 
     <section class="ft-card mt-6 p-5 sm:p-7" aria-labelledby="unread-title">
         <div class="flex items-center justify-between gap-3">

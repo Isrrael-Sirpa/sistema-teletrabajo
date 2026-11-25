@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Enums\DocumentEventType;
 use App\Enums\DocumentRecipientStatus;
 use App\Enums\DocumentStatus;
+use App\Enums\OrganizationalUnitType;
 use App\Models\Document;
 use App\Models\DocumentRecipient;
 use App\Models\OrganizationalUnit;
@@ -28,7 +29,14 @@ class DocumentRecipientService
 
         try {
             return DB::transaction(function () use ($actor, $document, $data): DocumentRecipient {
-                $target = $this->resolveTarget($actor, $data);
+                $target = $this->resolveTarget($actor, $document, $data);
+
+                if ($target['unit_id'] === $document->origin_unit_id
+                    && ! $actor->hasRole(\App\Enums\RoleName::STUDENT->value)) {
+                    throw ValidationException::withMessages([
+                        'recipient' => 'La unidad de origen no puede ser destinataria del mismo documento.',
+                    ]);
+                }
 
                 $existing = DocumentRecipient::withTrashed()
                     ->where('document_id', $document->getKey())
@@ -146,16 +154,16 @@ class DocumentRecipientService
     /** @param array<string, mixed> $data
      * @return array{unit_id: int, user_id: int|null}
      */
-    private function resolveTarget(User $actor, array $data): array
+    private function resolveTarget(User $actor, Document $document, array $data): array
     {
         if ($data['recipient_type'] === 'unit') {
             $unit = OrganizationalUnit::query()
                 ->availableAsDocumentDestination()
                 ->find($data['unit_id']);
 
-            if (! $unit) {
+            if (! $unit || $unit->type === OrganizationalUnitType::FACULTY) {
                 throw ValidationException::withMessages([
-                    'unit_id' => 'Seleccione una carrera o Kardex activo.',
+                    'unit_id' => 'Seleccione una unidad activa.',
                 ]);
             }
 

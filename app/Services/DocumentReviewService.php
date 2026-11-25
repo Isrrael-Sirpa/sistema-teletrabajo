@@ -11,6 +11,7 @@ use App\Models\Document;
 use App\Models\DocumentRecipient;
 use App\Models\DocumentReviewTask;
 use App\Models\User;
+use App\Notifications\DocumentReviewAssignedNotification;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
@@ -61,6 +62,7 @@ class DocumentReviewService
                     'unit_id' => $recipient->unit_id,
                     'assigned_to' => $assignee->public_id,
                 ]);
+                $assignee->notify(new DocumentReviewAssignedNotification($document));
             }
         });
     }

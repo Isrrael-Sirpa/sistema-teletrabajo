@@ -46,6 +46,13 @@ enum AuditAction: string
 
     case REPORT_EXPORTED = 'reports.exported';
 
+    case ACTIVITY_CREATED = 'activities.created';
+    case ACTIVITY_PROGRESS_RECORDED = 'activities.progress_recorded';
+    case ACTIVITY_SUBMITTED = 'activities.submitted';
+    case ACTIVITY_OBSERVED = 'activities.observed';
+    case ACTIVITY_COMPLETED = 'activities.completed';
+    case ACTIVITY_CANCELLED = 'activities.cancelled';
+
     public function result(): AuditResult
     {
         return match ($this) {
@@ -93,6 +100,12 @@ enum AuditAction: string
             self::DELEGATION_CREATED => 'Delegación temporal creada',
             self::DELEGATION_REVOKED => 'Delegación temporal revocada',
             self::REPORT_EXPORTED => 'Reporte documental exportado',
+            self::ACTIVITY_CREATED => 'Actividad asignada',
+            self::ACTIVITY_PROGRESS_RECORDED => 'Avance de actividad registrado',
+            self::ACTIVITY_SUBMITTED => 'Resultado de actividad presentado',
+            self::ACTIVITY_OBSERVED => 'Actividad devuelta con observaciones',
+            self::ACTIVITY_COMPLETED => 'Actividad concluida',
+            self::ACTIVITY_CANCELLED => 'Actividad cancelada',
         };
     }
 

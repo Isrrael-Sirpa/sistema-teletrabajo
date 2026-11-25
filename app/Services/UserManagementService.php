@@ -34,15 +34,14 @@ class UserManagementService
 
             $this->lockSensitiveScope($role, $unitId);
 
-            if ($data['status'] === UserStatus::ACTIVE->value) {
-                $this->ensureActiveResponsibleIsUnique($role, $unitId);
-            }
+            $this->ensureActiveResponsibleIsUnique($role, $unitId);
 
             $user = User::query()->create([
                 'name' => Str::squish($data['name']),
+                'academic_title' => $data['academic_title'] ?? null,
                 'email' => Str::lower(trim($data['email'])),
                 'password' => $data['password'],
-                'status' => $data['status'],
+                'status' => UserStatus::ACTIVE,
                 'organizational_unit_id' => $unitId,
             ]);
 
@@ -51,6 +50,7 @@ class UserManagementService
             $this->audit->record($actor, AuditAction::USER_CREATED, $user, newValues: [
                 'public_id' => $user->public_id,
                 'name' => $user->name,
+                'academic_title' => $user->academic_title,
                 'email' => $user->email,
                 'status' => $user->status,
                 'role' => $role,
@@ -76,6 +76,7 @@ class UserManagementService
             $oldRole = $lockedTarget->roleName();
             $oldValues = [
                 'name' => $lockedTarget->name,
+                'academic_title' => $lockedTarget->academic_title,
                 'email' => $lockedTarget->email,
                 'status' => $lockedTarget->status,
                 'role' => $oldRole,
@@ -109,6 +110,7 @@ class UserManagementService
 
             $lockedTarget->update([
                 'name' => Str::squish($data['name']),
+                'academic_title' => $data['academic_title'] ?? null,
                 'email' => Str::lower(trim($data['email'])),
                 'status' => $newStatus,
                 'organizational_unit_id' => $unitId,
@@ -117,6 +119,7 @@ class UserManagementService
 
             $newValues = [
                 'name' => $lockedTarget->name,
+                'academic_title' => $lockedTarget->academic_title,
                 'email' => $lockedTarget->email,
                 'status' => $lockedTarget->status,
                 'role' => $newRole,
@@ -197,13 +200,13 @@ class UserManagementService
     public function allowedRolesFor(User $actor): array
     {
         if ($actor->hasRole(RoleName::ADMINISTRATOR->value)) {
-            return RoleName::cases();
+            return array_values(array_filter(RoleName::cases(), fn (RoleName $role): bool => $role->isAssignable()));
         }
 
         if ($actor->hasRole(RoleName::CO_ADMINISTRATOR->value)) {
             return array_values(array_filter(
                 RoleName::cases(),
-                fn (RoleName $role): bool => $role !== RoleName::ADMINISTRATOR,
+                fn (RoleName $role): bool => $role->isSecondary(),
             ));
         }
 
@@ -232,13 +235,10 @@ class UserManagementService
             ]);
         }
 
-        if ($role->isGlobal()) {
-            return null;
-        }
-
         $unitId = filter_var($requestedUnitId, FILTER_VALIDATE_INT);
 
-        if ($actor->isResponsibleForUnit((int) $actor->organizational_unit_id)
+        if (! $actor->hasInstitutionalGlobalScope()
+            && $actor->isResponsibleForUnit((int) $actor->organizational_unit_id)
             && $unitId !== $actor->organizational_unit_id) {
             throw ValidationException::withMessages([
                 'organizational_unit_id' => 'Solo puede asignar usuarios a su propia unidad.',
@@ -259,7 +259,7 @@ class UserManagementService
             ->when($role === RoleName::STUDENT, fn ($query) => $query->where('type', 'career'))
             ->first();
 
-        if (! $unit || ($role->isUnitResponsible() && $unit->type->responsibleRole() !== $role)) {
+        if (! $unit || ! $role->acceptsUnit($unit->type, $unit->acronym)) {
             throw ValidationException::withMessages([
                 'organizational_unit_id' => 'Seleccione una unidad activa válida para este rol.',
             ]);

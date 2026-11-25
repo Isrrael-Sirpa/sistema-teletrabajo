@@ -15,12 +15,12 @@ enum RoleName: string
 
     public function isGlobal(): bool
     {
-        return in_array($this, [self::ADMINISTRATOR, self::CO_ADMINISTRATOR], true);
+        return $this === self::ADMINISTRATOR;
     }
 
     public function requiresUnit(): bool
     {
-        return ! $this->isGlobal();
+        return $this !== self::KARDEX_HEAD;
     }
 
     public function isUnitResponsible(): bool
@@ -53,11 +53,11 @@ enum RoleName: string
         return match ($this) {
             self::ADMINISTRATOR => 'Administrador',
             self::CO_ADMINISTRATOR => 'Co-administrador',
-            self::CAREER_HEAD => 'Jefe de Carrera',
-            self::KARDEX_HEAD => 'Encargado de Kardex',
+            self::CAREER_HEAD => 'Jefe o responsable de unidad',
+            self::KARDEX_HEAD => 'Responsable de unidad (rol anterior)',
             self::SECRETARY => 'Secretaria',
             self::SECRETARY_ASSISTANT => 'Auxiliar de Secretaría',
-            self::EXTRA => 'Extra',
+            self::EXTRA => 'Solicitante',
             self::STUDENT => 'Estudiante',
         };
     }
@@ -65,14 +65,29 @@ enum RoleName: string
     public function description(): string
     {
         return match ($this) {
-            self::ADMINISTRATOR => 'Administración institucional global.',
-            self::CO_ADMINISTRATOR => 'Administración operativa global sujeta a restricciones sensibles futuras.',
-            self::CAREER_HEAD => 'Gestión y decisiones dentro del ámbito de una carrera.',
-            self::KARDEX_HEAD => 'Gestión del equipo y decisiones oficiales de Kardex.',
+            self::ADMINISTRATOR => 'Administración técnica global desde el Departamento de Computación.',
+            self::CO_ADMINISTRATOR => 'Administración facultativa desde Decanato o Vicedecanato.',
+            self::CAREER_HEAD => 'Gestión y decisiones dentro de una carrera, departamento, instituto u otra unidad.',
+            self::KARDEX_HEAD => 'Rol anterior conservado únicamente para compatibilidad.',
             self::SECRETARY => 'Gestión documental operativa dentro de su ámbito.',
             self::SECRETARY_ASSISTANT => 'Apoyo de revisión y seguimiento sin decisiones definitivas.',
-            self::EXTRA => 'Consulta y descarga únicamente mediante autorización explícita.',
+            self::EXTRA => 'Docente, estudiante u otra persona que presenta correspondencia y recibe accesos autorizados.',
             self::STUDENT => 'Presentación de documentos y seguimiento limitado desde su carrera.',
+        };
+    }
+    public function isAssignable(): bool
+    {
+        return $this !== self::KARDEX_HEAD;
+    }
+    public function acceptsUnit(OrganizationalUnitType $type, ?string $acronym = null): bool
+    {
+        return match ($this) {
+            self::ADMINISTRATOR => $type === OrganizationalUnitType::DEPARTMENT && $acronym === 'DCOMP',
+            self::CO_ADMINISTRATOR => in_array($type, [OrganizationalUnitType::DEAN_OFFICE, OrganizationalUnitType::VICE_DEAN_OFFICE], true),
+            self::KARDEX_HEAD => $type === OrganizationalUnitType::KARDEX,
+            self::CAREER_HEAD => ! in_array($type, [OrganizationalUnitType::FACULTY, OrganizationalUnitType::DEAN_OFFICE, OrganizationalUnitType::VICE_DEAN_OFFICE], true),
+            self::EXTRA => $type === OrganizationalUnitType::CAREER,
+            default => $type !== OrganizationalUnitType::FACULTY,
         };
     }
 }

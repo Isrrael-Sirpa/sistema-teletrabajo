@@ -7,6 +7,7 @@ enum DocumentEventType: string
     case DOCUMENT_CREATED = 'document_created';
     case DRAFT_UPDATED = 'draft_updated';
     case DRAFT_DISCARDED = 'draft_discarded';
+    case CORRELATIVE_RESERVED = 'correlative_reserved';
     case RECIPIENT_ADDED = 'recipient_added';
     case RECIPIENT_UPDATED = 'recipient_updated';
     case RECIPIENT_REMOVED = 'recipient_removed';
@@ -31,6 +32,7 @@ enum DocumentEventType: string
             self::DOCUMENT_CREATED => 'Documento creado',
             self::DRAFT_UPDATED => 'Borrador actualizado',
             self::DRAFT_DISCARDED => 'Borrador descartado',
+            self::CORRELATIVE_RESERVED => 'Cite reservado',
             self::RECIPIENT_ADDED => 'Destinatario agregado',
             self::RECIPIENT_UPDATED => 'Destinatario modificado',
             self::RECIPIENT_REMOVED => 'Destinatario retirado',

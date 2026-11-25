@@ -22,7 +22,7 @@
                 <label class="text-sm font-semibold text-slate-700">Buscar
                     <input type="search" name="q" value="{{ $filters['q'] ?? '' }}" maxlength="120" placeholder="Buscar documentos" class="mt-1 min-h-11 w-full rounded-lg border-slate-300">
                 </label>
-                <label class="text-sm font-semibold text-slate-700">Estado
+                <label class="text-sm font-semibold text-slate-700">Estado general del documento
                     <select name="status" class="mt-1 min-h-11 w-full rounded-lg border-slate-300">
                         <option value="">Todos</option>
                         @foreach (App\Enums\DocumentStatus::cases() as $status)
@@ -44,7 +44,16 @@
                     <label class="text-sm font-semibold text-slate-700">Reporte
                         <select name="report" class="mt-1 min-h-11 w-full rounded-lg border-slate-300">
                             @foreach ($reportLabels as $value => $label)
-                                <option value="{{ $value }}" @selected(($filters['report'] ?? 'summary') === $value)>{{ $label }}</option>
+                                @php
+                                    $unitLabel = auth()->user()->hasInstitutionalGlobalScope()
+                                        ? $label
+                                        : match ($value) {
+                                            'sent' => 'Enviados desde mi unidad',
+                                            'received' => 'Recibidos por mi unidad',
+                                            default => $label,
+                                        };
+                                @endphp
+                                <option value="{{ $value }}" @selected(($filters['report'] ?? 'summary') === $value)>{{ $unitLabel }}</option>
                             @endforeach
                         </select>
                     </label>

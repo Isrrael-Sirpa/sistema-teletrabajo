@@ -1,11 +1,9 @@
 <x-layouts.authenticated title="Editar tipo documental">
     <div class="mx-auto max-w-3xl">
-        <a href="{{ route('document-types.show', $documentType) }}" class="ft-button-secondary mb-5">← Volver al tipo documental</a>
+        <a href="{{ route('document-types.index') }}" class="ft-button-secondary mb-5">← Volver al listado</a>
         <header class="ft-page-header">
             <div>
-                <p class="ft-eyebrow">Catálogo institucional</p>
                 <h1 class="ft-page-title">Editar tipo documental</h1>
-                <p class="ft-page-description">Actualice el nombre o la explicación de {{ $documentType->name }} sin afectar documentos históricos.</p>
             </div>
         </header>
 
@@ -13,7 +11,7 @@
             @csrf
             @method('PUT')
             @include('document-types._form', [
-                'cancelUrl' => route('document-types.show', $documentType),
+                'cancelUrl' => route('document-types.index'),
                 'submitLabel' => 'Guardar cambios',
             ])
         </form>

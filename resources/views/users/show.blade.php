@@ -3,7 +3,7 @@
         <div class="ft-page-header">
             <div>
                 <p class="ft-eyebrow">Detalle del usuario</p>
-                <h1 class="ft-page-title">{{ $user->name }}</h1>
+                <h1 class="ft-page-title">{{ $user->displayName() }}</h1>
                 <p class="ft-page-description break-all">{{ $user->email }}</p>
             </div>
             <a href="{{ route('users.index') }}" class="ft-button-secondary">Volver al listado</a>

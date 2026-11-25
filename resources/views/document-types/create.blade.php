@@ -3,9 +3,7 @@
         <a href="{{ route('document-types.index') }}" class="ft-button-secondary mb-5">← Volver a tipos documentales</a>
         <header class="ft-page-header">
             <div>
-                <p class="ft-eyebrow">Catálogo institucional</p>
                 <h1 class="ft-page-title">Crear tipo documental</h1>
-                <p class="ft-page-description">Agregue una opción clara que podrá utilizarse en documentos futuros.</p>
             </div>
         </header>
 

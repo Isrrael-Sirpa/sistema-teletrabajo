@@ -34,8 +34,16 @@ class DocumentNotificationRecipientResolver
             ->values();
         $unitUsers = $unitIds->isEmpty()
             ? collect()
-            : User::query()->documentResponsibles()
+            : User::query()
+                ->where('status', UserStatus::ACTIVE->value)
                 ->whereIn('organizational_unit_id', $unitIds)
+                ->whereHas('roles', fn ($roles) => $roles->whereIn('name', [
+                    RoleName::ADMINISTRATOR->value,
+                    RoleName::CO_ADMINISTRATOR->value,
+                    RoleName::CAREER_HEAD->value,
+                    RoleName::KARDEX_HEAD->value,
+                    RoleName::SECRETARY->value,
+                ]))
                 ->get();
 
         return $personalUsers
@@ -95,10 +103,13 @@ class DocumentNotificationRecipientResolver
     public function forAuthorizationResponsibles(Document $document, int $actorId): Collection
     {
         return User::query()
-            ->documentResponsibles()
+            ->with(['organizationalUnit', 'roles'])
+            ->where('status', UserStatus::ACTIVE->value)
             ->where('organizational_unit_id', $document->origin_unit_id)
             ->whereKeyNot($actorId)
-            ->get();
+            ->get()
+            ->filter(fn (User $user): bool => $user->isResponsibleForUnit($document->origin_unit_id))
+            ->values();
     }
 
     /** @return Collection<int, User> */

@@ -1,9 +1,10 @@
 @php
     $routeName = data_get($notification->data, 'route.name');
     $routeParameters = data_get($notification->data, 'route.parameters', []);
-    $documentUrl = $routeName === 'documents.show' && is_array($routeParameters)
+    $destinationUrl = in_array($routeName, ['documents.show', 'activities.show'], true) && is_array($routeParameters)
         ? route($routeName, $routeParameters)
         : null;
+    $destinationLabel = $routeName === 'activities.show' ? 'Abrir actividad' : 'Abrir documento';
     $occurredAt = filled(data_get($notification->data, 'occurred_at'))
         ? \Illuminate\Support\Carbon::parse(data_get($notification->data, 'occurred_at'))->timezone('America/La_Paz')
         : $notification->created_at->timezone('America/La_Paz');
@@ -16,14 +17,14 @@
 ])>
     <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div class="min-w-0">
-            <div class="flex flex-wrap items-center gap-2">@if($unread)<span class="ft-badge bg-blue-100 text-blue-900">Nueva</span>@endif<h3 class="font-bold text-slate-950">{{ data_get($notification->data, 'title', 'Notificación documental') }}</h3></div>
-            <p class="mt-1 text-sm leading-6 text-slate-700">{{ data_get($notification->data, 'message', 'Existe una actualización documental.') }}</p>
+            <div class="flex flex-wrap items-center gap-2">@if($unread)<span class="ft-badge bg-blue-100 text-blue-900">Nueva</span>@endif<h3 class="font-bold text-slate-950">{{ data_get($notification->data, 'title', 'Notificación interna') }}</h3></div>
+            <p class="mt-1 text-sm leading-6 text-slate-700">{{ data_get($notification->data, 'message', 'Existe una actualización pendiente de revisión.') }}</p>
             <time datetime="{{ $occurredAt->toIso8601String() }}" class="mt-2 block text-xs font-semibold text-slate-500">{{ $occurredAt->format('d/m/Y H:i:s') }}</time>
         </div>
 
         <div class="flex shrink-0 flex-wrap gap-2 sm:max-w-60 sm:justify-end">
-            @if ($documentUrl)
-                <a href="{{ $documentUrl }}" class="ft-button-primary">Abrir documento</a>
+            @if ($destinationUrl)
+                <a href="{{ $destinationUrl }}" class="ft-button-primary">{{ $destinationLabel }}</a>
             @endif
             @if ($unread)
                 <form method="POST" action="{{ route('notifications.read', $notification->id) }}">

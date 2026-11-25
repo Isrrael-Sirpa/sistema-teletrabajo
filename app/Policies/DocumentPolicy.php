@@ -2,6 +2,7 @@
 
 namespace App\Policies;
 
+use App\Enums\ActivityStatus;
 use App\Enums\DocumentRecipientStatus;
 use App\Enums\DocumentStatus;
 use App\Enums\OutgoingAuthorizationStatus;
@@ -74,6 +75,7 @@ class DocumentPolicy
     public function discardDraft(User $user, Document $document): bool
     {
         if ($document->general_status !== DocumentStatus::DRAFT
+            || $document->code !== null
             || ! $this->hasCapability($user, PermissionName::DOCUMENTS_DISCARD_DRAFT, $document->origin_unit_id)) {
             return false;
         }
@@ -118,6 +120,10 @@ class DocumentPolicy
             ->exists()
             || $document->reviewVersionIdsFor($user)
                 ->when($file, fn ($versions) => $versions->where('document_version_id', $file->document_version_id))
+                ->exists()
+            || $document->workActivities()
+                ->whereNotIn('status', [ActivityStatus::COMPLETED->value, ActivityStatus::CANCELLED->value])
+                ->whereHas('assignees', fn ($assignees) => $assignees->whereKey($user->getKey()))
                 ->exists();
     }
 
@@ -144,7 +150,11 @@ class DocumentPolicy
                 ], true));
         }
 
-        return $this->update($user, $document);
+        return ($user->hasInstitutionalGlobalScope() || $user->isResponsibleForUnit($document->origin_unit_id))
+            && in_array($document->authorization_status, [
+                OutgoingAuthorizationStatus::NOT_REQUIRED,
+                OutgoingAuthorizationStatus::APPROVED,
+            ], true);
     }
 
     public function requestAuthorization(User $user, Document $document): bool
@@ -321,6 +331,7 @@ class DocumentPolicy
     public function assignReview(User $user, Document $document, DocumentRecipient $recipient): bool
     {
         return $this->hasOpenReview($document, $recipient)
+            && $recipient->status === DocumentRecipientStatus::IN_REVIEW
             && $user->isResponsibleForUnit($recipient->unit_id);
     }
 

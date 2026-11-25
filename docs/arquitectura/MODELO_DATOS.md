@@ -24,6 +24,12 @@ erDiagram
     unidades_organizacionales ||--o{ destinatarios_documentos : recibe_como_unidad
     usuarios ||--o{ destinatarios_documentos : recibe_como_persona
     destinatarios_documentos ||--o{ tareas_revision_documentos : asigna_revision
+    unidades_organizacionales ||--o{ actividades_unidad : organiza
+    documentos ||--o{ actividades_unidad : vincula_opcionalmente
+    actividades_unidad ||--o{ responsables_actividades : asigna
+    usuarios ||--o{ responsables_actividades : participa
+    actividades_unidad ||--o{ avances_actividades : registra
+    usuarios ||--o{ avances_actividades : informa
     documentos ||--o{ versiones_documentos : conserva
     versiones_documentos ||--o{ archivos_documentos : contiene
     documentos ||--o{ eventos_documentos : registra
@@ -54,6 +60,9 @@ erDiagram
 | `documentos` | `App\Models\Document` | Entidad principal de expedientes y trámites documentales. |
 | `destinatarios_documentos` | `App\Models\DocumentRecipient` | Destinos de unidad o persona con estado y decisión independiente. |
 | `tareas_revision_documentos` | `App\Models\DocumentReviewTask` | Tareas internas de revisión delegadas a secretaría o auxiliares. |
+| `actividades_unidad` | `App\Models\WorkActivity` | Labores encomendadas por Jefatura, independientes o vinculadas a correspondencia. |
+| `responsables_actividades` | Pivote `WorkActivity` / `User` | Responsable principal y personal de apoyo asignado a una actividad. |
+| `avances_actividades` | `App\Models\ActivityUpdate` | Registro cronológico de avances informados por el personal asignado. |
 | `versiones_documentos` | `App\Models\DocumentVersion` | Historial de versiones e iteraciones ante correcciones/devoluciones. |
 | `archivos_documentos` | `App\Models\DocumentFile` | Metadatos y hashes de archivos adjuntos en almacenamiento privado. |
 | `observaciones_documentos` | `App\Models\DocumentObservation` | Anotaciones y observaciones internas entre revisores. |
@@ -118,6 +127,12 @@ erDiagram
 - **Campos:** `id`, `public_id`, `document_recipient_id` (FK `destinatarios_documentos`), `assignment_key` (uuid), `document_version_id` (FK `versiones_documentos`), `assigned_to` (FK `usuarios`), `assigned_by` (FK `usuarios`), `instructions` (text), `recommendation` (varchar 20 nullable), `message` (text nullable), `submitted_at`, `closed_at`, timestamps.
 - Restricción `CHECK`: valida que al enviarse la recomendación pertenezca a `('approve', 'reject')` y cuente con mensaje de justificación no vacío.
 
+### `actividades_unidad`, `responsables_actividades` y `avances_actividades`
+- **`actividades_unidad`:** `id`, `public_id`, `organizational_unit_id`, `document_id` opcional, `created_by`, `assigned_by`, `title`, `activity_type`, `instructions`, `expected_result`, `priority`, `status`, `due_at`, `result_summary`, `result_document_id` opcional, campos de presentación, revisión, conclusión, cancelación y `lock_version`.
+- **`responsables_actividades`:** relación única entre actividad y usuario con `responsibility` igual a `primary` o `support`; una actividad conserva un responsable principal y puede incluir colaboradores.
+- **`avances_actividades`:** `activity_id`, `user_id`, detalle, porcentaje estimado opcional y marcas de tiempo; no existe una ruta de edición o eliminación pública.
+- Una actividad puede apuntar a un documento fuente y a un borrador resultante, pero no reemplaza los estados, autorizaciones ni el envío formal de la correspondencia.
+
 ---
 
 ## 5. Versiones, Archivos y Acceso Privado
@@ -148,4 +163,4 @@ erDiagram
 
 ### `notificaciones`
 - Mapeada al modelo `App\Models\Notification` sobre la tabla `notificaciones`.
-- Almacena avisos internos del flujo documental, vencimientos y tareas de revisión.
+- Almacena avisos internos del flujo documental, vencimientos, revisiones y actividades de la unidad.

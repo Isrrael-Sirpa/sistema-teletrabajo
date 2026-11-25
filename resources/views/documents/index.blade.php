@@ -1,16 +1,19 @@
 <x-layouts.authenticated title="Documentos">
     <header class="ft-page-header">
-        <div>
-            <p class="ft-eyebrow">Gestión documental</p>
-            <h1 class="ft-page-title">Documentos</h1>
-            <p class="ft-page-description">Encuentre un documento, revise su estado o continúe una tarea pendiente. Solo verá la información a la que tiene acceso.</p>
-        </div>
+        <h1 class="ft-page-title">Documentos</h1>
         @can('create', App\Models\Document::class)
             <a href="{{ route('documents.create') }}" class="ft-button-primary shrink-0"><x-ui.icon name="plus" /> Nuevo documento</a>
         @endcan
     </header>
 
-    @if ($workFilterLabel)
+    @if (auth()->user()->hasInstitutionalGlobalScope() && auth()->user()->organizational_unit_id)
+        <nav class="mt-5 flex flex-wrap gap-2" aria-label="Vista de documentos">
+            <a href="{{ route('documents.index') }}" @class(['ft-button-secondary', 'border-[var(--ft-primary)] bg-[var(--ft-primary)] text-white hover:bg-[var(--ft-primary)]' => $workFilter !== 'my_unit'])>Todos los documentos</a>
+            <a href="{{ route('documents.index', ['work' => 'my_unit']) }}" @class(['ft-button-secondary', 'border-[var(--ft-primary)] bg-[var(--ft-primary)] text-white hover:bg-[var(--ft-primary)]' => $workFilter === 'my_unit'])>Documentos de mi unidad</a>
+        </nav>
+    @endif
+
+    @if ($workFilterLabel && $workFilter !== 'my_unit')
         <div class="ft-alert ft-alert-info mt-6 flex flex-wrap items-center justify-between gap-3">
             <div><p class="text-sm font-semibold text-blue-950">Vista de trabajo: {{ $workFilterLabel }}</p><p class="mt-1 text-sm">Puede acotar esta vista con el buscador y los filtros.</p></div>
             <a href="{{ route('documents.index') }}" class="text-sm font-bold text-blue-900 underline">Quitar esta vista</a>
@@ -19,7 +22,7 @@
 
     @php
         $documents->getCollection()->loadMissing('recipients.unit');
-        $advancedNames = ['priority', 'deadline', 'document_type', 'origin_unit', 'recipient_unit', 'recipient_user', 'recipient_status', 'creator', 'sender', 'confidentiality', 'sent_from', 'sent_to', 'due_from', 'due_to', 'created_from', 'created_to', 'correction_pending', 'version_min'];
+        $advancedNames = ['priority', 'deadline', 'document_type', 'origin_unit', 'recipient_unit', 'confidentiality', 'sent_from', 'sent_to'];
         $hasAdvancedFilters = collect($advancedNames)->contains(fn ($name) => filled($filters[$name] ?? null))
             || ($filters['sort'] ?? 'created_at') !== 'created_at'
             || ($filters['direction'] ?? 'desc') !== 'desc';
@@ -48,8 +51,13 @@
         </div>
 
         @unless (auth()->user()->hasRole('student'))
-        <details @if($hasAdvancedFilters) open @endif class="rounded-lg border border-slate-200">
-            <summary class="cursor-pointer px-4 py-3 text-sm font-bold text-[var(--ft-secondary)]">Más filtros <span class="ml-1 font-normal text-slate-600">· prioridad, fechas y destinatarios</span>@if ($hasAdvancedFilters)<span class="ft-badge ml-2 bg-blue-100 text-blue-900">En uso</span>@endif</summary>
+        <details @if($hasAdvancedFilters && blank($filters['q'] ?? null)) open @endif class="rounded-lg border border-slate-200">
+            <summary class="cursor-pointer px-4 py-3 text-sm font-bold text-[var(--ft-secondary)]">
+                Más filtros
+                @if ($hasAdvancedFilters)
+                    <span class="ft-badge ml-2 bg-blue-100 text-blue-900">En uso</span>
+                @endif
+            </summary>
             <div class="grid gap-4 border-t border-slate-200 p-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 <label class="text-sm font-semibold text-slate-700">Prioridad
                     <select name="priority" class="mt-1 block min-h-11 w-full rounded-lg border-slate-300 text-sm">
@@ -92,33 +100,14 @@
                 <label class="text-sm font-semibold text-slate-700">Unidad destinataria
                     <select name="recipient_unit" class="mt-1 block min-h-11 w-full rounded-lg border-slate-300 text-sm"><option value="">Todas</option>@foreach($units as $unit)<option value="{{ $unit->public_id }}" @selected(($filters['recipient_unit'] ?? '') === $unit->public_id)>{{ $unit->name }}{{ $unit->is_active ? '' : ' (inactiva)' }}</option>@endforeach</select>
                 </label>
-                <label class="text-sm font-semibold text-slate-700">Destinatario personal
-                    <select name="recipient_user" class="mt-1 block min-h-11 w-full rounded-lg border-slate-300 text-sm"><option value="">Todos</option>@foreach($people as $person)<option value="{{ $person->public_id }}" @selected(($filters['recipient_user'] ?? '') === $person->public_id)>{{ $person->name }}{{ $person->status->value === 'inactive' ? ' (inactivo)' : '' }}</option>@endforeach</select>
-                </label>
-                <label class="text-sm font-semibold text-slate-700">Estado del destinatario
-                    <select name="recipient_status" class="mt-1 block min-h-11 w-full rounded-lg border-slate-300 text-sm"><option value="">Todos</option>@foreach(App\Enums\DocumentRecipientStatus::cases() as $recipientStatus)<option value="{{ $recipientStatus->value }}" @selected(($filters['recipient_status'] ?? '') === $recipientStatus->value)>{{ $recipientStatus->label() }}</option>@endforeach</select>
-                </label>
-                <label class="text-sm font-semibold text-slate-700">Creador
-                    <select name="creator" class="mt-1 block min-h-11 w-full rounded-lg border-slate-300 text-sm"><option value="">Todos</option>@foreach($people as $person)<option value="{{ $person->public_id }}" @selected(($filters['creator'] ?? '') === $person->public_id)>{{ $person->name }}{{ $person->status->value === 'inactive' ? ' (inactivo)' : '' }}</option>@endforeach</select>
-                </label>
-                <label class="text-sm font-semibold text-slate-700">Remitente
-                    <select name="sender" class="mt-1 block min-h-11 w-full rounded-lg border-slate-300 text-sm"><option value="">Todos</option>@foreach($people as $person)<option value="{{ $person->public_id }}" @selected(($filters['sender'] ?? '') === $person->public_id)>{{ $person->name }}{{ $person->status->value === 'inactive' ? ' (inactivo)' : '' }}</option>@endforeach</select>
-                </label>
                 <label class="text-sm font-semibold text-slate-700">Clasificación
                     <select name="confidentiality" class="mt-1 block min-h-11 w-full rounded-lg border-slate-300 text-sm"><option value="">Todas</option>@foreach(App\Enums\DocumentConfidentiality::cases() as $classification)<option value="{{ $classification->value }}" @selected(($filters['confidentiality'] ?? '') === $classification->value)>{{ $classification->label() }}</option>@endforeach</select>
                 </label>
-                @foreach ([['sent_from', 'Enviado desde'], ['sent_to', 'Enviado hasta'], ['due_from', 'Límite desde'], ['due_to', 'Límite hasta'], ['created_from', 'Creado desde'], ['created_to', 'Creado hasta']] as [$name, $label])
+                @foreach ([['sent_from', 'Enviado desde'], ['sent_to', 'Enviado hasta']] as [$name, $label])
                     <label class="text-sm font-semibold text-slate-700">{{ $label }}
                         <input type="date" name="{{ $name }}" value="{{ $filters[$name] ?? '' }}" class="mt-1 block min-h-11 w-full rounded-lg border-slate-300 text-sm">
                     </label>
                 @endforeach
-                <label class="text-sm font-semibold text-slate-700">Versión actual mínima
-                    <input type="number" name="version_min" value="{{ $filters['version_min'] ?? '' }}" min="1" max="999" class="mt-1 block min-h-11 w-full rounded-lg border-slate-300 text-sm">
-                </label>
-                <label class="flex min-h-11 items-center gap-3 rounded-lg border border-slate-200 px-3 text-sm font-semibold text-slate-700">
-                    <input type="checkbox" name="correction_pending" value="1" @checked(!empty($filters['correction_pending'])) class="rounded border-slate-300">
-                    Corrección pendiente
-                </label>
             </div>
         </details>
         @endunless
@@ -136,7 +125,9 @@
 
     <div class="mt-6 flex flex-wrap items-center justify-between gap-2">
         <p class="text-sm font-semibold text-slate-700" role="status">{{ $documents->total() }} {{ $documents->total() === 1 ? 'documento encontrado' : 'documentos encontrados' }}</p>
-        @if ($documents->total() > 0)<p class="text-sm text-slate-500">Mostrando {{ $documents->firstItem() }}–{{ $documents->lastItem() }} de {{ $documents->total() }}</p>@endif
+        @if ($documents->total() > 0)
+            <p class="text-sm text-slate-500">Mostrando {{ $documents->firstItem() }}–{{ $documents->lastItem() }} de {{ $documents->total() }}</p>
+        @endif
     </div>
 
     <section class="ft-card mt-6 overflow-hidden" aria-labelledby="documents-list-title">
@@ -155,7 +146,8 @@
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-200 bg-white" role="rowgroup">
-                    @forelse ($documents as $document)
+                    @if ($documents->isNotEmpty())
+                        @foreach ($documents as $document)
                         <tr role="row">
                             <td role="cell" data-label="Documento" class="px-5 py-4">
                                 <p class="text-xs font-bold text-[var(--ft-secondary)]">{{ auth()->user()->hasRole('student') ? ($document->sent_at ? 'Solicitud enviada' : 'Borrador de solicitud') : ($document->code ?? 'Borrador sin código') }}</p>
@@ -167,9 +159,20 @@
                                 @php
                                     $destinationNames = $document->recipients->pluck('unit.name')->filter()->unique();
                                 @endphp
-                                <p class="mt-1 text-xs text-slate-600"><span class="font-semibold">Destino:</span> {{ $destinationNames->take(2)->join(', ') ?: 'Por definir' }}@if($destinationNames->count() > 2) y {{ $destinationNames->count() - 2 }} más @endif</p>
+                                <p class="mt-1 text-xs text-slate-600">
+                                    <span class="font-semibold">Destino:</span> {{ $destinationNames->take(2)->join(', ') ?: 'Por definir' }}
+                                    @if ($destinationNames->count() > 2)
+                                        y {{ $destinationNames->count() - 2 }} más
+                                    @endif
+                                </p>
                             </td>
-                            <td role="cell" data-label="Prioridad" class="px-5 py-4 text-sm text-slate-700">@if ($document->priority === App\Enums\DocumentPriority::URGENT)<span class="ft-badge bg-red-50 text-red-900">{{ $document->priority->label() }}</span>@else{{ $document->priority->label() }}@endif</td>
+                            <td role="cell" data-label="Prioridad" class="px-5 py-4 text-sm text-slate-700">
+                                @if ($document->priority === App\Enums\DocumentPriority::URGENT)
+                                    <span class="ft-badge bg-red-50 text-red-900">{{ $document->priority->label() }}</span>
+                                @else
+                                    {{ $document->priority->label() }}
+                                @endif
+                            </td>
                             <td role="cell" data-label="Estado" class="px-5 py-4"><x-ui.status-badge :status="$document->general_status" /></td>
                             <td role="cell" data-label="Fechas" class="px-5 py-4 text-xs text-slate-600">
                                 <p>Creado: {{ $document->created_at->format('d/m/Y H:i') }}</p>
@@ -182,9 +185,23 @@
                             </td>
                             <td role="cell" data-label="Acciones" class="px-5 py-4 text-right"><a href="{{ route('documents.show', $document) }}" class="ft-button-secondary" aria-label="Ver documento: {{ $document->subject }}">Ver documento</a></td>
                         </tr>
-                    @empty
-                        <tr role="row"><td role="cell" colspan="6" class="ft-empty-state px-5 py-10 text-center text-sm text-slate-600"><span class="mx-auto grid h-12 w-12 place-items-center rounded-xl bg-slate-100 text-[var(--ft-secondary)]"><x-ui.icon name="documents" /></span><span class="mt-4 block font-bold text-slate-800">No se encontraron documentos.</span><span class="mt-2 block">{{ $hasFilters ? 'Pruebe con otros filtros o quite la vista de trabajo.' : 'Los documentos que pueda consultar aparecerán aquí.' }}</span>@if ($hasFilters)<a href="{{ route('documents.index') }}" class="ft-button-secondary mt-5">Ver sin filtros</a>@else @can('create', App\Models\Document::class)<a href="{{ route('documents.create') }}" class="ft-button-primary mt-5">Crear un documento</a>@endcan @endif</td></tr>
-                    @endforelse
+                        @endforeach
+                    @else
+                        <tr role="row">
+                            <td role="cell" colspan="6" class="ft-empty-state px-5 py-10 text-center text-sm text-slate-600">
+                                <span class="mx-auto grid h-12 w-12 place-items-center rounded-xl bg-slate-100 text-[var(--ft-secondary)]"><x-ui.icon name="documents" /></span>
+                                <span class="mt-4 block font-bold text-slate-800">No se encontraron documentos.</span>
+                                <span class="mt-2 block">{{ $hasFilters ? 'Pruebe con otros filtros o quite la vista de trabajo.' : 'Los documentos que pueda consultar aparecerán aquí.' }}</span>
+                                @if ($hasFilters)
+                                    <a href="{{ route('documents.index') }}" class="ft-button-secondary mt-5">Ver sin filtros</a>
+                                @else
+                                    @can('create', App\Models\Document::class)
+                                        <a href="{{ route('documents.create') }}" class="ft-button-primary mt-5">Crear un documento</a>
+                                    @endcan
+                                @endif
+                            </td>
+                        </tr>
+                    @endif
                 </tbody>
             </table>
         </div>

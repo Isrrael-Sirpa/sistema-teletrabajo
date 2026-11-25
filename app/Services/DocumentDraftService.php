@@ -30,6 +30,12 @@ class DocumentDraftService
             $origin = $this->resolveOrigin($actor, $data['origin_unit_id'] ?? null);
             $type = $this->resolveActiveType((int) $data['document_type_id']);
 
+            if ($type->uses_correlative) {
+                throw ValidationException::withMessages([
+                    'document_type_id' => 'Los documentos con correlativo se preparan desde Control de correlativos para reservar su cite.',
+                ]);
+            }
+
             $document = Document::query()->create([
                 'document_type_id' => $type->getKey(),
                 'origin_unit_id' => $origin->getKey(),
@@ -71,6 +77,14 @@ class DocumentDraftService
         return DB::transaction(function () use ($actor, $document, $data): Document {
             $origin = $this->resolveOrigin($actor, $data['origin_unit_id'] ?? null);
             $type = $this->resolveActiveType((int) $data['document_type_id']);
+            if ($document->code !== null && (
+                $document->document_type_id !== $type->getKey()
+                || $document->origin_unit_id !== $origin->getKey()
+            )) {
+                throw ValidationException::withMessages([
+                    'document' => 'El tipo documental y la unidad de origen no pueden cambiarse porque el cite ya fue reservado.',
+                ]);
+            }
             $expectedVersion = (int) $data['lock_version'];
             $trackedFields = [
                 'document_type_id' => 'tipo documental',

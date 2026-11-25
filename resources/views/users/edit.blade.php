@@ -3,9 +3,7 @@
         <a href="{{ route('users.show', $user) }}" class="ft-button-secondary mb-5">← Volver al usuario</a>
         <header class="ft-page-header">
             <div>
-                <p class="ft-eyebrow">Gestión de usuarios</p>
                 <h1 class="ft-page-title">Editar usuario</h1>
-                <p class="ft-page-description">Actualice los datos de {{ $user->name }}. El historial y la cuenta se conservarán.</p>
             </div>
         </header>
 

@@ -47,6 +47,7 @@ class DocumentTypeSeeder extends Seeder
                     'name' => $name,
                     'code' => $code,
                     'correlative_label' => self::CORRELATIVE_LABELS[$code],
+                    'uses_correlative' => ! in_array($code, ['correspondencia', 'documento_kardex', 'otros'], true),
                     'description' => null,
                     'is_active' => true,
                     'created_by' => null,

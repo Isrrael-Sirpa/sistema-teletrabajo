@@ -15,7 +15,6 @@ use App\Models\DocumentRecipient;
 use App\Models\DocumentReviewTask;
 use App\Models\DocumentType;
 use App\Models\OrganizationalUnit;
-use App\Models\User;
 use App\Services\DocumentAccessGrantService;
 use App\Services\DocumentDeadlineService;
 use App\Services\DocumentDraftService;
@@ -69,16 +68,6 @@ class DocumentController extends Controller
                         ->whereIn('document_id', $visibleDocuments()->select((new Document)->qualifyColumn('id'))));
             })
             ->orderBy('name')->get();
-        $people = User::query()->with('organizationalUnit')
-            ->where(function ($query) use ($visibleDocuments): void {
-                $query->whereIn('id', $visibleDocuments()->select('created_by'))
-                    ->orWhereIn('id', $visibleDocuments()->whereNotNull('sender_user_id')->select('sender_user_id'))
-                    ->orWhereIn('id', DocumentRecipient::query()
-                        ->whereNotNull('user_id')
-                        ->select('user_id')
-                        ->whereIn('document_id', $visibleDocuments()->select((new Document)->qualifyColumn('id'))));
-            })
-            ->orderBy('name')->get();
         $documentTypes = DocumentType::query()
             ->whereIn('id', $visibleDocuments()->select('document_type_id'))
             ->orderBy('name')->get();
@@ -90,7 +79,6 @@ class DocumentController extends Controller
             'workFilterLabel',
             'deadlineStatuses',
             'units',
-            'people',
             'documentTypes',
         ));
     }
@@ -107,6 +95,7 @@ class DocumentController extends Controller
             'creator',
             'authorizationRequester',
             'authorizer',
+            'correlativeReserver.organizationalUnit',
             'annuller',
             'recipients' => fn ($recipients) => $recipients->when(
                 $taskOnly,
@@ -162,6 +151,7 @@ class DocumentController extends Controller
                     $allowed->where('type', 'kardex')
                         ->orWhere(fn ($career) => $career->where('type', 'career')->whereKey($actor->organizational_unit_id));
                 }))
+                ->when(! $actor->hasRole(\App\Enums\RoleName::STUDENT->value), fn ($query) => $query->whereKeyNot($document->origin_unit_id))
                 ->orderBy('type')
                 ->orderBy('name')
                 ->get();
@@ -244,7 +234,7 @@ class DocumentController extends Controller
         Gate::authorize('update', $document);
 
         return view('documents.edit', [
-            ...$this->formData($request),
+            ...$this->formData($request, $document),
             'document' => $document,
         ]);
     }
@@ -267,12 +257,20 @@ class DocumentController extends Controller
     }
 
     /** @return array<string, mixed> */
-    private function formData(Request $request): array
+    private function formData(Request $request, ?Document $editingDocument = null): array
     {
         $user = $request->user();
         $canSelectOrigin = $user->hasInstitutionalGlobalScope();
-        $documentTypes = DocumentType::query()->availableForNewDocuments();
-        $selectedDocumentType = DocumentType::query()->availableForNewDocuments();
+        $documentTypes = DocumentType::query()->availableForNewDocuments()
+            ->where(function ($query) use ($editingDocument): void {
+                $query->where('uses_correlative', false);
+
+                if ($editingDocument) {
+                    $query->orWhereKey($editingDocument->document_type_id);
+                }
+            });
+        $selectedDocumentType = DocumentType::query()->availableForNewDocuments()
+            ->where('uses_correlative', false);
 
         if ($user->hasRole(\App\Enums\RoleName::STUDENT->value)) {
             $documentTypes->whereIn('code', ['solicitud', 'otros']);
@@ -288,6 +286,7 @@ class DocumentController extends Controller
                 ? OrganizationalUnit::query()->active()->orderBy('type')->orderBy('name')->get()
                 : collect(),
             'fixedOrigin' => $canSelectOrigin ? null : $user->organizationalUnit,
+            'defaultOriginId' => $canSelectOrigin ? $user->organizational_unit_id : null,
             'canSelectOrigin' => $canSelectOrigin,
             'priorities' => DocumentPriority::cases(),
             'confidentialities' => DocumentConfidentiality::cases(),

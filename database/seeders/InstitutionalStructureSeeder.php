@@ -31,10 +31,32 @@ class InstitutionalStructureSeeder extends Seeder
                 ],
             );
 
+            $dean = OrganizationalUnit::query()->updateOrCreate(
+                ['type' => OrganizationalUnitType::DEAN_OFFICE->value],
+                [
+                    'parent_id' => $faculty->id,
+                    'name' => 'Decanato de la Facultad de Tecnología',
+                    'acronym' => 'DECANATO',
+                    'description' => 'Unidad ejecutiva de la Facultad de Tecnología.',
+                    'is_active' => true,
+                ],
+            );
+
+            $viceDean = OrganizationalUnit::query()->updateOrCreate(
+                ['type' => OrganizationalUnitType::VICE_DEAN_OFFICE->value],
+                [
+                    'parent_id' => $dean->id,
+                    'name' => 'Vicedecanato de la Facultad de Tecnología',
+                    'acronym' => 'VICEDEC',
+                    'description' => 'Unidad académica dependiente del Decanato.',
+                    'is_active' => true,
+                ],
+            );
+
             OrganizationalUnit::query()->updateOrCreate(
                 ['type' => OrganizationalUnitType::KARDEX->value],
                 [
-                    'parent_id' => $faculty->id,
+                    'parent_id' => $viceDean->id,
                     'name' => 'Kardex de la Facultad de Tecnología',
                     'acronym' => 'KARDEX',
                     'correlative_prefix' => 'FT KARDEX.',
@@ -42,6 +64,26 @@ class InstitutionalStructureSeeder extends Seeder
                     'is_active' => true,
                 ],
             );
+
+            foreach ([
+                [OrganizationalUnitType::ADMIN_DIRECTION, 'Dirección Administrativa', 'DIR-ADM', $dean->id],
+                [OrganizationalUnitType::DEPARTMENT, 'Departamento de Computación', 'DCOMP', $viceDean->id],
+                [OrganizationalUnitType::DEPARTMENT, 'Departamento de Materias Básicas', 'DMB', $viceDean->id],
+                [OrganizationalUnitType::LIBRARY, 'Biblioteca Facultativa', 'BIB-FT', $viceDean->id],
+                [OrganizationalUnitType::INSTITUTE, 'Instituto de Investigaciones y Aplicaciones Tecnológicas', 'IIAT', $viceDean->id],
+                [OrganizationalUnitType::POSTGRADUATE_UNIT, 'Unidad de Postgrado', 'POSTGRADO', $viceDean->id],
+                [OrganizationalUnitType::PROGRAM, 'Curso Preuniversitario', 'PREUNIV', $viceDean->id],
+            ] as [$type, $name, $acronym, $parentId]) {
+                OrganizationalUnit::query()->firstOrCreate(
+                    ['type' => $type->value, 'acronym' => $acronym],
+                    [
+                        'parent_id' => $parentId,
+                        'name' => $name,
+                        'description' => 'Unidad institucional inicial de la Facultad de Tecnología.',
+                        'is_active' => true,
+                    ],
+                );
+            }
 
             foreach ($careers as $career) {
                 $name = $career['name'] ?? null;
@@ -58,7 +100,7 @@ class InstitutionalStructureSeeder extends Seeder
 
                 if ($existing) {
                     if ($existing->type !== OrganizationalUnitType::CAREER
-                        || $existing->parent_id !== $faculty->id) {
+                        || $existing->parent_id !== $viceDean->id) {
                         throw new RuntimeException("La unidad {$name} ya existe con un tipo o padre incompatible.");
                     }
 
@@ -73,7 +115,7 @@ class InstitutionalStructureSeeder extends Seeder
                 }
 
                 OrganizationalUnit::query()->create([
-                    'parent_id' => $faculty->id,
+                    'parent_id' => $viceDean->id,
                     'type' => OrganizationalUnitType::CAREER,
                     'name' => $name,
                     'acronym' => $acronym,

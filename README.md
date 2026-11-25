@@ -29,7 +29,7 @@ Plataforma web institucional para la Facultad de Tecnología de la Universidad M
 - Fase 22: anulación documental formal, irreversible y trazable implementada y validada en PostgreSQL.
 - Fase 23: seguridad, configuración de producción, despliegue y recuperación implementados y validados.
 - Fase 24: aceptación automatizada, regresión final, cierre técnico y preparación de entrega completados.
-- No se inició una Fase 25.
+- Fase 25: actividades de la unidad implementadas con asignación, avances, resultados, revisión y vínculo opcional a correspondencia.
 
 La página pública principal es el login institucional. Después de autenticar, `/panel` presenta el trabajo operativo correspondiente al rol y al ámbito autorizado. El RBAC, las Policies por ámbito y el flujo documental permanecen como fuente de autorización.
 
@@ -369,6 +369,7 @@ composer audit
 - [Fase 23: producción y seguridad](docs/FASE_23_PRODUCCION_SEGURIDAD.md)
 - [Fase 24: cierre técnico](docs/FASE_24_CIERRE_TECNICO.md)
 - [Fase 25: acceso de estudiantes](docs/FASE_25_ACCESO_ESTUDIANTES.md)
+- [Fase 25: actividades de la unidad](docs/FASE_25_ACTIVIDADES_UNIDAD.md)
 - [Rediseño visual y experiencia de usuario](docs/REDISENO_VISUAL.md)
 - [Iteración de producto institucional: UX y validación](docs/PRODUCTO_INSTITUCIONAL_UX.md)
 - [Autoridad formal y visor privado de archivos](docs/AUTORIDAD_Y_VISOR_PRIVADO.md)

@@ -2,13 +2,14 @@
     <header class="ft-page-header">
         <div>
             @unless ($unitDashboard)<p class="ft-eyebrow">Su espacio de trabajo</p>@endunless
-            <h1 class="ft-page-title">Buen día, {{ auth()->user()->name }}</h1>
+            <h1 class="ft-page-title">Buen día, {{ auth()->user()->displayName() }}</h1>
             @unless ($unitDashboard)<p class="ft-page-description">Revise lo que necesita atención y continúe desde donde lo dejó.</p>@endunless
             <p class="mt-3 inline-flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"><span class="font-semibold">{{ $roleLabel }}</span><span aria-hidden="true" class="text-slate-300">|</span><span>{{ $scopeLabel }}</span></p>
         </div>
-        @can('create', App\Models\Document::class)
-            <a href="{{ route('documents.create') }}" @class(['self-start sm:self-auto', 'ft-button-secondary' => $unitDashboard, 'ft-button-primary' => ! $unitDashboard])><x-ui.icon name="plus" /> Nuevo documento</a>
-        @endcan
+        <div class="flex flex-wrap gap-2 self-start sm:self-auto">
+            @can('create', App\Models\WorkActivity::class)<a href="{{ route('activities.create') }}" class="ft-button-primary"><x-ui.icon name="plus" /> Asignar actividad</a>@endcan
+            @can('create', App\Models\Document::class)<a href="{{ route('documents.create') }}" class="ft-button-secondary"><x-ui.icon name="plus" /> Nuevo documento</a>@endcan
+        </div>
     </header>
 
     @if ($temporaryHeadships->isNotEmpty())
@@ -24,10 +25,22 @@
         </section>
     @endif
 
-    @if ($unitDashboard)
+    @if ($unitDashboard && ! $globalDashboard)
         @include('dashboard.unit')
-    @else
-    @unless ($role === App\Enums\RoleName::STUDENT)
+    @endif
+    @if ($globalDashboard)
+        <section class="mt-8" aria-labelledby="summary-title">
+            <p class="ft-eyebrow">Vista rápida</p>
+            <h2 id="summary-title" class="mt-1 text-xl font-bold text-[var(--ft-primary)]">Resumen institucional</h2>
+            <p class="mt-2 text-sm leading-6 text-slate-600">Seleccione una categoría para abrir su listado. Las cifras corresponden a toda la Facultad.</p>
+            <div class="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                @foreach ($cards as $card)
+                    <a href="{{ $card['url'] }}" class="ft-card ft-card-accent group flex min-h-44 flex-col p-5 transition hover:-translate-y-0.5 hover:shadow-md" aria-label="{{ $card['label'] }}: {{ $card['count'] }}. Abrir listado relacionado"><div class="flex items-start justify-between gap-3"><span class="grid h-9 w-9 place-items-center rounded-lg bg-[var(--career-background)] text-[var(--career-primary)]"><x-ui.icon name="documents" /></span>@if($card['tone'] === 'danger')<span class="ft-badge bg-red-50 text-red-900">Vencido</span>@elseif($card['tone'] === 'warning')<span class="ft-badge bg-amber-50 text-amber-900">Próximo</span>@endif</div><div class="mt-4 flex items-baseline gap-2"><span class="text-3xl font-bold tracking-tight text-[var(--ft-primary)]">{{ $card['count'] }}</span><span class="text-sm font-bold text-slate-800">{{ $card['label'] }}</span></div><p class="mt-1 text-sm leading-5 text-slate-600">{{ $card['description'] }}</p><span class="mt-auto pt-3 text-sm font-bold text-[var(--ft-secondary)] group-hover:underline">Abrir listado <span aria-hidden="true">→</span></span></a>
+                @endforeach
+            </div>
+        </section>
+    @endif
+    @if ((! $unitDashboard || $globalDashboard) && $role !== App\Enums\RoleName::STUDENT)
     <section class="mt-8" aria-labelledby="attention-title">
         <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
             <div><p class="ft-eyebrow">Por dónde empezar</p><h2 id="attention-title" class="mt-1 text-xl font-bold text-[var(--ft-primary)]">{{ $role === App\Enums\RoleName::EXTRA ? 'Documentos autorizados recientes' : 'Necesitan su atención' }}</h2></div>
@@ -66,9 +79,9 @@
             </ul>
         </div>
     </section>
-    @endunless
+    @endif
 
-    <section class="mt-9" aria-labelledby="summary-title">
+    @if (! $globalDashboard && ! $unitDashboard)<section class="mt-9" aria-labelledby="summary-title">
         <p class="ft-eyebrow">Vista rápida</p>
         <h2 id="summary-title" class="mt-1 text-xl font-bold text-[var(--ft-primary)]">Resumen</h2>
         <p class="mt-2 text-sm leading-6 text-slate-600">Seleccione una categoría para abrir su listado. Las cifras corresponden a su ámbito de acceso.</p>
@@ -82,10 +95,9 @@
                 </a>
             @endforeach
         </div>
-    </section>
+    </section>@endif
 
     @if ($quickLinks)
         <section class="ft-card mt-9 p-5 sm:p-6" aria-labelledby="quick-links-title"><h2 id="quick-links-title" class="ft-form-section-title">Accesos rápidos</h2><p class="ft-field-help">Herramientas disponibles para su trabajo institucional.</p><nav class="mt-4 flex flex-wrap gap-3" aria-label="Accesos rápidos del panel">@foreach ($quickLinks as $link)<a href="{{ $link['url'] }}" class="ft-button-secondary">{{ $link['label'] }} <x-ui.icon name="arrow" class="h-4 w-4" /></a>@endforeach</nav></section>
-    @endif
     @endif
 </x-layouts.authenticated>

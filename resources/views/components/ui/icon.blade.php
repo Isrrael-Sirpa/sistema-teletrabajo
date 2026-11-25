@@ -15,6 +15,8 @@
         @case('menu')<path stroke-linecap="round" d="M4 6h16M4 12h16M4 18h16" />@break
         @case('close')<path stroke-linecap="round" d="M5 5 19 19M19 5 5 19" />@break
         @case('arrow')<path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14m-6-6 6 6-6 6" />@break
+        @case('eye')<path stroke-linecap="round" stroke-linejoin="round" d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" /><circle cx="12" cy="12" r="2.5" />@break
+        @case('eye-off')<path stroke-linecap="round" stroke-linejoin="round" d="m3 3 18 18M10.6 10.6a2 2 0 0 0 2.8 2.8M9.9 5.1A10.7 10.7 0 0 1 12 5c6 0 9.5 7 9.5 7a18.3 18.3 0 0 1-3.1 4.1M6.1 6.1A18.4 18.4 0 0 0 2.5 12S6 19 12 19c1.2 0 2.4-.3 3.4-.8" /><path stroke-linecap="round" stroke-linejoin="round" d="M14 9.2A3 3 0 0 0 9.2 14" />@break
         @default<circle cx="12" cy="12" r="9" />
     @endswitch
 </svg>

@@ -8,8 +8,9 @@
     $moduleTitle = $title ? str($title)->before(' — ')->toString() : 'Inicio';
     $section = match (true) {
         request()->routeIs('documents.*') => ['Documentos', route('documents.index')],
-        request()->routeIs('reviews.mine') => ['Mis tareas', route('reviews.mine')],
+        request()->routeIs('reviews.mine') => ['Revisiones asignadas', route('reviews.mine')],
         request()->routeIs('reviews.unit') => ['Revisiones de mi unidad', route('reviews.unit')],
+        request()->routeIs('activities.*') => ['Actividades de unidad', route('activities.index')],
         request()->routeIs('users.*') => ['Usuarios', route('users.index')],
         request()->routeIs('units.*') => ['Carreras y unidades', route('units.index')],
         request()->routeIs('document-types.*') => ['Tipos documentales', route('document-types.index')],
@@ -45,22 +46,17 @@
                 @can('viewAny', App\Models\Document::class)
                     <p class="ft-nav-label">DOCUMENTOS</p>
                     <x-ui.nav-link :href="route('documents.index')" icon="documents" :active="request()->routeIs('documents.*') && ! request()->routeIs('documents.create')">Documentos</x-ui.nav-link>
-                    @if (App\Models\DocumentReviewTask::canBeAssignedTo($viewer))
-                        <x-ui.nav-link :href="route('reviews.mine')" icon="list" :active="request()->routeIs('reviews.mine')">Mis tareas</x-ui.nav-link>
-                    @elseif ($viewer->isResponsibleForUnit((int) $viewer->organizational_unit_id))
-                        <x-ui.nav-link :href="route('reviews.unit')" icon="list" :active="request()->routeIs('reviews.unit')">Revisiones de mi unidad</x-ui.nav-link>
-                    @endif
                     @can('create', App\Models\Document::class)
                         <x-ui.nav-link :href="route('documents.create')" icon="plus" :active="request()->routeIs('documents.create')">Nuevo documento</x-ui.nav-link>
                     @endcan
                     @if($role === App\Enums\RoleName::SECRETARY)
                         <x-ui.nav-link :href="route('correlatives.index')" icon="list" :active="request()->routeIs('correlatives.*')">Control de correlativos</x-ui.nav-link>
                     @endif
-                @else
-                    <p class="ft-nav-label">AVISOS</p>
                 @endcan
-                <x-ui.nav-link :href="route('notifications.index')" icon="bell" :active="request()->routeIs('notifications.*')">Notificaciones @if($navigationUnreadCount > 0)<span class="ml-auto rounded-full bg-white/20 px-2 py-0.5 text-xs">{{ $navigationUnreadCount > 99 ? '99+' : $navigationUnreadCount }}</span>@endif</x-ui.nav-link>
-
+                @can('viewAny', App\Models\WorkActivity::class)
+                    <p class="ft-nav-label">ACTIVIDADES</p>
+                    <x-ui.nav-link :href="route('activities.index')" icon="list" :active="request()->routeIs('activities.*')">Actividades de unidad</x-ui.nav-link>
+                @endcan
                 @if($viewer->can('users.view') || $viewer->can('units.view') || $viewer->can('document_types.view') || $viewer->canAny(['delegations.manage_global', 'delegations.manage_unit']))
                     <p class="ft-nav-label">GESTIÓN</p>
                     @can('users.view')<x-ui.nav-link :href="route('users.index')" icon="users" :active="request()->routeIs('users.*')">Usuarios</x-ui.nav-link>@endcan
@@ -106,12 +102,12 @@
                     <details class="relative" data-profile-menu>
                         <summary class="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg px-1.5 hover:bg-slate-100 sm:gap-3">
                             <span class="grid h-9 w-9 place-items-center rounded-full bg-institutional-100 text-sm font-bold text-institutional-900" aria-hidden="true">{{ mb_strtoupper(mb_substr($viewer->name, 0, 1)) }}</span>
-                            <span class="hidden max-w-36 text-left sm:block"><span class="block truncate text-xs font-bold text-slate-900">{{ $viewer->name }}</span><span class="block truncate text-xs text-slate-600">{{ $role?->label() ?? 'Usuario' }}</span></span>
+                            <span class="hidden max-w-52 text-left sm:block"><span class="block truncate text-xs font-bold text-slate-900">{{ $viewer->displayName() }}</span><span class="block truncate text-xs text-slate-600">{{ $viewer->institutionalPosition() }}</span></span>
                             <span class="sr-only">Menú de {{ $viewer->name }}</span>
                         </summary>
                         <div class="absolute right-0 z-50 mt-2 w-64 rounded-xl border border-slate-200 bg-white p-3 shadow-xl">
-                            <p class="break-words px-2 text-sm font-bold text-slate-900">{{ $viewer->name }}</p>
-                            <p class="px-2 text-xs text-slate-600">{{ $role?->label() ?? 'Usuario' }}</p>
+                            <p class="break-words px-2 text-sm font-bold text-slate-900">{{ $viewer->displayName() }}</p>
+                            <p class="px-2 text-xs text-slate-600">{{ $viewer->institutionalPosition() }}</p>
                             <p class="mt-1 break-all px-2 text-xs text-slate-500">{{ $viewer->email }}</p>
                             <form method="POST" action="{{ route('logout') }}" class="mt-3 border-t border-slate-200 pt-3">
                                 @csrf

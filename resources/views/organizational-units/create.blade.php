@@ -1,11 +1,9 @@
-<x-layouts.authenticated title="Agregar carrera">
+<x-layouts.authenticated title="Agregar unidad">
     <div class="mx-auto max-w-3xl">
         <a href="{{ route('units.index') }}" class="ft-button-secondary mb-5">← Volver al listado</a>
         <header class="ft-page-header">
             <div>
-                <p class="ft-eyebrow">Administración institucional</p>
-                <h1 class="ft-page-title">Agregar carrera</h1>
-                <p class="ft-page-description">Registre una carrera perteneciente a la Facultad de Tecnología.</p>
+                <h1 class="ft-page-title">Agregar unidad</h1>
             </div>
         </header>
 
@@ -13,9 +11,9 @@
             @csrf
             @include('organizational-units._form', [
                 'unit' => null,
-                'faculty' => $faculty,
+                'parents' => $parents,
                 'cancelUrl' => route('units.index'),
-                'submitLabel' => 'Crear carrera',
+                'submitLabel' => 'Crear unidad',
             ])
         </form>
     </div>

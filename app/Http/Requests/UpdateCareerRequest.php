@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Enums\OrganizationalUnitType;
 use App\Enums\RoleName;
 use App\Models\OrganizationalUnit;
 use Illuminate\Foundation\Http\FormRequest;
@@ -25,6 +26,8 @@ class UpdateCareerRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'type' => ['prohibited'],
+            'parent_id' => ['required', 'integer', 'exists:unidades_organizacionales,id'],
             'name' => ['required', 'string', 'max:160'],
             'acronym' => ['required', 'string', 'max:20', 'regex:/^[\pL\pN][\pL\pN .&\/-]*$/u'],
             'correlative_prefix' => [Rule::prohibitedIf(! $this->user()?->hasRole(RoleName::ADMINISTRATOR->value)), 'nullable', 'string', 'max:60'],
@@ -54,12 +57,14 @@ class UpdateCareerRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'name.required' => 'Ingrese el nombre de la carrera.',
+            'name.required' => 'Ingrese el nombre de la unidad.',
+            'parent_id.required' => 'Seleccione la unidad de la que depende.',
+            'parent_id.exists' => 'La unidad superior seleccionada no existe.',
             'name.max' => 'El nombre no puede superar los 160 caracteres.',
-            'acronym.required' => 'Ingrese la sigla de la carrera.',
+            'acronym.required' => 'Ingrese la sigla de la unidad.',
             'acronym.max' => 'La sigla no puede superar los 20 caracteres.',
             'acronym.regex' => 'La sigla contiene caracteres no permitidos.',
-            'correlative_prefix.prohibited' => 'Solo el Administrador puede modificar el prefijo institucional.',
+            'correlative_prefix.prohibited' => 'Solo el Administrador puede modificar el prefijo de correspondencia.',
             'correlative_prefix.max' => 'El prefijo no puede superar los 60 caracteres.',
             'description.max' => 'La descripción no puede superar los 2000 caracteres.',
         ];
@@ -70,6 +75,7 @@ class UpdateCareerRequest extends FormRequest
         $description = $this->input('description');
 
         $data = [
+            'parent_id' => $this->input('parent_id') ?? $this->route('unit')?->parent_id,
             'name' => Str::squish((string) $this->input('name')),
             'acronym' => Str::upper(Str::squish((string) $this->input('acronym'))),
             'description' => filled($description) ? trim((string) $description) : null,

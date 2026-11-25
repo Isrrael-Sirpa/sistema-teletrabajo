@@ -1,11 +1,11 @@
-<x-layouts.authenticated :title="$unitBoard ? 'Revisiones de mi unidad' : 'Mis tareas'">
+<x-layouts.authenticated :title="$unitBoard ? 'Revisiones de mi unidad' : 'Revisiones asignadas'">
     <div class="ft-page-header">
         <div>
-            <h1 class="ft-page-title">{{ $unitBoard ? 'Revisiones de mi unidad' : 'Mis tareas' }}</h1>
+            <h1 class="ft-page-title">{{ $unitBoard ? 'Revisiones de mi unidad' : 'Revisiones asignadas' }}</h1>
             <p class="ft-page-description">
                 {{ $unitBoard
                     ? 'Consulte el avance del equipo. Para asignar una revisión, abra un documento recibido.'
-                    : 'Abra una tarea para consultar el documento y entregar su recomendación al responsable de la unidad.' }}
+                    : 'Abra una revisión para consultar el documento y entregar su recomendación al responsable de la unidad.' }}
             </p>
         </div>
         @if ($unitBoard)

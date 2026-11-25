@@ -20,10 +20,17 @@
         @error('name')<p id="name-error" class="ft-field-error">{{ $message }}</p>@enderror
     </div>
 
+    <div class="rounded-xl border border-slate-200 p-4">
+        <label class="flex items-start gap-3" for="uses_correlative">
+            <input id="uses_correlative" name="uses_correlative" type="checkbox" value="1" @checked(old('uses_correlative', $documentType?->uses_correlative ?? true)) class="mt-1 h-4 w-4 rounded border-slate-300 text-blue-700 focus:ring-blue-600">
+            <span><span class="block text-sm font-semibold text-slate-800">Usa correlativo institucional</span><span class="mt-1 block text-sm text-slate-600">Las secretarías reservarán un cite antes de preparar este tipo documental.</span></span>
+        </label>
+    </div>
+
     <div>
         <label for="correlative_label" class="block text-sm font-semibold text-slate-800">Abreviatura para el correlativo</label>
-        <input id="correlative_label" name="correlative_label" type="text" value="{{ old('correlative_label', $documentType?->correlative_label) }}" required maxlength="30" autocapitalize="characters" spellcheck="false" class="mt-2 block min-h-12 w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-base uppercase text-slate-950 shadow-sm focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20" aria-invalid="{{ $errors->has('correlative_label') ? 'true' : 'false' }}" @error('correlative_label') aria-describedby="correlative-label-error" @enderror>
-        <p class="ft-field-help">Ejemplos: NOTA, MEM., CIRC., INF. o RES. Se usa automáticamente al enviar.</p>
+        <input id="correlative_label" name="correlative_label" type="text" value="{{ old('correlative_label', $documentType?->correlative_label) }}" maxlength="30" autocapitalize="characters" spellcheck="false" class="mt-2 block min-h-12 w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-base uppercase text-slate-950 shadow-sm focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20" aria-invalid="{{ $errors->has('correlative_label') ? 'true' : 'false' }}" @error('correlative_label') aria-describedby="correlative-label-error" @enderror>
+        <p class="ft-field-help">Solo es obligatoria si este tipo usa correlativo. Ejemplos: NOTA, MEM., CIRC., INF. o RES.</p>
         @error('correlative_label')<p id="correlative-label-error" class="ft-field-error">{{ $message }}</p>@enderror
     </div>
 

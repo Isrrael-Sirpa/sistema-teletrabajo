@@ -53,7 +53,7 @@
                 </form>
             @endcan
             @can('approveRecipient', [$document, $recipient])
-                <form method="POST" action="{{ route('documents.recipients.transition', [$document, $recipient, 'approve']) }}" onsubmit="return confirm('¿Desea aprobar este documento para el destinatario indicado? La decisión quedará registrada en el historial.');">
+                <form method="POST" action="{{ route('documents.recipients.transition', [$document, $recipient, 'approve']) }}" data-confirm-title="Aprobar documento" data-confirm-message="La decisión quedará registrada en el historial.">
                     @csrf
                     @method('PATCH')
                     <input type="hidden" name="document_lock_version" value="{{ $document->lock_version }}">

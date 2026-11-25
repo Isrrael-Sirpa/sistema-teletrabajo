@@ -27,12 +27,9 @@
                 </div>
             </dl>
 
-            @if ($unit->type === App\Enums\OrganizationalUnitType::CAREER)
-                <p class="ft-alert ft-alert-info mt-6">La sigla identifica esta carrera en los códigos de documentos futuros. Modificarla no cambia los códigos ya enviados.</p>
+            @can('update', $unit)
                 <div class="mt-7 flex flex-wrap gap-3 border-t border-slate-200 pt-6">
-                    @can('update', $unit)
-                        <a href="{{ route('units.edit', $unit) }}" class="ft-button-primary">Editar carrera</a>
-                    @endcan
+                    <a href="{{ route('units.edit', $unit) }}" class="ft-button-primary">Editar unidad</a>
                     @can('deactivate', $unit)
                         <form method="POST" action="{{ route('units.deactivate', $unit) }}" onsubmit="return confirm('¿Está seguro de desactivar esta carrera? Esta acción no elimina su historial.')">
                             @csrf

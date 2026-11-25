@@ -4,9 +4,11 @@ namespace App\Services;
 
 use App\Enums\AuditAction;
 use App\Enums\OrganizationalUnitType;
+use App\Enums\RoleName;
 use App\Models\OrganizationalUnit;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use LogicException;
 
 class OrganizationalUnitService
@@ -19,15 +21,19 @@ class OrganizationalUnitService
     public function createCareer(User $actor, array $data): OrganizationalUnit
     {
         return DB::transaction(function () use ($actor, $data): OrganizationalUnit {
-            $faculty = OrganizationalUnit::query()
-                ->where('type', OrganizationalUnitType::FACULTY->value)
-                ->where('is_active', true)
-                ->firstOrFail();
+            $type = OrganizationalUnitType::from($data['type']);
+            $parent = OrganizationalUnit::query()->active()->findOrFail($data['parent_id']);
+
+            if ($type === OrganizationalUnitType::FACULTY) {
+                throw new LogicException('La Facultad es la única unidad raíz y no puede crearse desde esta pantalla.');
+            }
 
             $unit = OrganizationalUnit::query()->create([
                 ...$data,
-                'parent_id' => $faculty->id,
-                'type' => OrganizationalUnitType::CAREER,
+                'type' => $type,
+                'correlative_prefix' => $type === OrganizationalUnitType::CAREER
+                    ? 'FT C.'.Str::upper($data['acronym']).'.'
+                    : null,
                 'is_active' => true,
             ]);
 
@@ -49,9 +55,17 @@ class OrganizationalUnitService
      */
     public function updateCareer(User $actor, OrganizationalUnit $unit, array $data): OrganizationalUnit
     {
-        $this->ensureCareer($unit);
+        $this->ensureEditable($actor, $unit);
 
         return DB::transaction(function () use ($actor, $unit, $data): OrganizationalUnit {
+            $parent = OrganizationalUnit::query()->active()->findOrFail($data['parent_id']);
+            if ($parent->id === $unit->id || $this->isDescendantOf($parent, $unit)) {
+                throw new LogicException('Una unidad no puede depender de sí misma ni de una unidad subordinada.');
+            }
+            if ($unit->type === OrganizationalUnitType::CAREER && blank($unit->correlative_prefix)) {
+                $data['correlative_prefix'] = 'FT C.'.Str::upper($data['acronym']).'.';
+            }
+
             $oldValues = $unit->only(['name', 'acronym', 'correlative_prefix', 'description', 'is_active']);
             $unit->update($data);
 
@@ -69,7 +83,7 @@ class OrganizationalUnitService
 
     public function setCareerActive(User $actor, OrganizationalUnit $unit, bool $active): OrganizationalUnit
     {
-        $this->ensureCareer($unit);
+        $this->ensureEditable($actor, $unit);
 
         return DB::transaction(function () use ($actor, $unit, $active): OrganizationalUnit {
             $oldActive = $unit->is_active;
@@ -87,10 +101,25 @@ class OrganizationalUnitService
         });
     }
 
-    private function ensureCareer(OrganizationalUnit $unit): void
+    private function ensureEditable(User $actor, OrganizationalUnit $unit): void
     {
-        if ($unit->type !== OrganizationalUnitType::CAREER) {
-            throw new LogicException('Only career units can be managed through this service.');
+        if ($unit->type === OrganizationalUnitType::FACULTY
+            || ($unit->type === OrganizationalUnitType::KARDEX
+                && ! $actor->hasRole(RoleName::ADMINISTRATOR->value))) {
+            throw new LogicException('Esta unidad institucional está protegida.');
         }
+    }
+
+    private function isDescendantOf(OrganizationalUnit $candidate, OrganizationalUnit $ancestor): bool
+    {
+        $current = $candidate;
+        while ($current->parent_id !== null) {
+            if ($current->parent_id === $ancestor->id) {
+                return true;
+            }
+            $current = $current->parent()->firstOrFail();
+        }
+
+        return false;
     }
 }

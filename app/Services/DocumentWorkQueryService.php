@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Enums\DocumentRecipientStatus;
 use App\Enums\DocumentStatus;
+use App\Enums\OutgoingAuthorizationStatus;
 use App\Enums\PermissionName;
 use App\Enums\RoleName;
 use App\Models\Document;
@@ -26,6 +27,7 @@ class DocumentWorkQueryService
     {
         return match ($work) {
             'unit_pending' => $this->unitPending($query, $user),
+            'my_unit' => $this->unitDocuments($query, $user),
             'pending_receive' => $this->recipientWork($query, $user, [DocumentRecipientStatus::SENT]),
             'in_review' => $this->recipientWork($query, $user, [DocumentRecipientStatus::IN_REVIEW]),
             'decision' => $this->recipientWork(
@@ -46,10 +48,11 @@ class DocumentWorkQueryService
     {
         return match ($work) {
             'unit_pending' => 'Documentos pendientes de mi unidad',
+            'my_unit' => 'Documentos de mi unidad',
             'pending_receive' => 'Pendientes de recibir',
             'in_review' => 'En revisión',
             'decision' => 'Requieren decisión',
-            'collaboration', 'assigned' => 'Mis tareas pendientes',
+            'collaboration', 'assigned' => 'Mis revisiones pendientes',
             'returned_correction' => 'Devueltos para corregir',
             'my_drafts' => 'Mis borradores',
             'authorized' => 'Documentos autorizados',
@@ -65,8 +68,34 @@ class DocumentWorkQueryService
             return true;
         }
 
-        $query->whereNotIn('general_status', [DocumentStatus::DRAFT->value, DocumentStatus::ANNULLED->value])
-            ->whereHas('recipients', fn (Builder $recipients) => $this->pendingUnitRecipients($recipients, $user));
+        $query->where(function (Builder $documents) use ($user): void {
+            $documents->where(function (Builder $received) use ($user): void {
+                $received->whereNotIn('general_status', [DocumentStatus::DRAFT->value, DocumentStatus::ANNULLED->value])
+                    ->whereHas('recipients', fn (Builder $recipients) => $this->pendingUnitRecipients($recipients, $user));
+            })->orWhere(function (Builder $authorization) use ($user): void {
+                $authorization->where('general_status', DocumentStatus::DRAFT->value)
+                    ->where('authorization_status', OutgoingAuthorizationStatus::PENDING->value)
+                    ->where('origin_unit_id', $user->organizational_unit_id);
+            });
+        });
+
+        return true;
+    }
+
+    /** @param Builder<Document> $query */
+    private function unitDocuments(Builder $query, User $user): bool
+    {
+        $unitId = (int) $user->organizational_unit_id;
+        if ($unitId < 1) {
+            $query->whereRaw('1 = 0');
+
+            return true;
+        }
+
+        $query->where(function (Builder $documents) use ($unitId): void {
+            $documents->where('origin_unit_id', $unitId)
+                ->orWhereHas('recipients', fn (Builder $recipients) => $recipients->where('unit_id', $unitId));
+        });
 
         return true;
     }
@@ -121,6 +150,14 @@ class DocumentWorkQueryService
                             && ! $this->delegations->can($user, PermissionName::DOCUMENTS_VERSION, (int) $user->organizational_unit_id)) {
                             $returned->where('created_by', $user->getKey());
                         }
+                    });
+                }
+
+                if ($user->isResponsibleForUnit((int) $user->organizational_unit_id)) {
+                    $attention->orWhere(function (Builder $authorization) use ($user): void {
+                        $authorization->where('general_status', DocumentStatus::DRAFT->value)
+                            ->where('authorization_status', OutgoingAuthorizationStatus::PENDING->value)
+                            ->where('origin_unit_id', $user->organizational_unit_id);
                     });
                 }
             });

@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\ActivityStatus;
 use App\Enums\DocumentConfidentiality;
 use App\Enums\DocumentEventType;
 use App\Enums\DocumentPriority;
@@ -16,6 +17,7 @@ use App\Models\DocumentFile;
 use App\Models\DocumentReviewTask;
 use App\Models\OrganizationalUnit;
 use App\Models\User;
+use App\Models\WorkActivity;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -44,17 +46,29 @@ class DashboardService
                 : ($user->organizationalUnit?->name ?? 'Sin unidad asignada'),
             'unreadNotificationCount' => $unreadCount,
             'temporaryHeadships' => $this->delegations->activeFor($user),
+            'globalDashboard' => $role?->isGlobal() === true,
         ];
 
         if ($user->isResponsibleForUnit((int) $user->organizational_unit_id)) {
             $corrections = $this->workQueries->visibleTo($user);
             $this->workQueries->apply($corrections, $user, 'returned_correction');
 
-            return $base + [
+            $unitData = [
                 'unitDashboard' => true,
                 'unitPending' => $this->unitPending($user),
                 'teamTasks' => $this->teamTasks($user->organizational_unit_id),
                 'hasReturnedCorrections' => $corrections->exists(),
+            ];
+
+            if ($role?->isGlobal() !== true) {
+                return $base + $unitData;
+            }
+
+            return $base + $unitData + [
+                'cards' => $this->globalCards($unreadCount),
+                'quickLinks' => $this->quickLinks($user, $role),
+                'attentionTitle' => 'Necesitan su atención',
+                'attention' => $this->attention($user, $role),
             ];
         }
 
@@ -192,6 +206,7 @@ class DashboardService
     private function secretaryCards(User $user, int $unreadCount): array
     {
         return [
+            $this->activityCard($user),
             $this->taskCard($user),
             $this->workCard($user, 'Copias y envíos por recibir', 'pending_receive', 'Copias de su unidad y envíos personales pendientes de recepción.'),
             $this->workCard($user, 'Mis borradores', 'my_drafts', 'Documentos propios aún no enviados.'),
@@ -205,6 +220,7 @@ class DashboardService
     private function assistantCards(User $user, int $unreadCount): array
     {
         return [
+            $this->activityCard($user),
             $this->taskCard($user),
             ...$this->deadlineCards($user),
             $this->notificationCard($unreadCount),
@@ -215,6 +231,7 @@ class DashboardService
     private function extraCards(User $user, int $unreadCount): array
     {
         return [
+            $this->activityCard($user),
             $this->workCard($user, 'Documentos autorizados', 'authorized', 'Accesos explícitos vigentes.'),
             $this->notificationCard($unreadCount),
         ];
@@ -273,7 +290,20 @@ class DashboardService
         $count = DocumentReviewTask::query()->assignedTo($user)
             ->whereHas('recipient.document')->pending()->count();
 
-        return $this->card('Mis tareas', $count, route('reviews.mine'), 'Revisiones internas pendientes de entregar.');
+        return $this->card('Revisiones asignadas', $count, route('reviews.mine'), 'Revisiones internas pendientes de entregar.');
+    }
+
+    private function activityCard(User $user): array
+    {
+        $count = WorkActivity::query()->visibleTo($user)
+            ->whereIn('status', [
+                ActivityStatus::ASSIGNED->value,
+                ActivityStatus::IN_PROGRESS->value,
+                ActivityStatus::OBSERVED->value,
+                ActivityStatus::SUBMITTED->value,
+            ])->count();
+
+        return $this->card('Actividades pendientes', $count, route('activities.index'), 'Actividades de unidad pendientes de conclusión.');
     }
 
     /** @return Collection<int, array<string, mixed>> */

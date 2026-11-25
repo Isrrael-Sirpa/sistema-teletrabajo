@@ -5,9 +5,11 @@ namespace App\Providers;
 use App\Models\Document;
 use App\Models\DocumentType;
 use App\Models\User;
+use App\Models\WorkActivity;
 use App\Policies\DocumentPolicy;
 use App\Policies\DocumentTypePolicy;
 use App\Policies\UserPolicy;
+use App\Policies\WorkActivityPolicy;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 
@@ -29,5 +31,6 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(Document::class, DocumentPolicy::class);
         Gate::policy(DocumentType::class, DocumentTypePolicy::class);
         Gate::policy(User::class, UserPolicy::class);
+        Gate::policy(WorkActivity::class, WorkActivityPolicy::class);
     }
 }

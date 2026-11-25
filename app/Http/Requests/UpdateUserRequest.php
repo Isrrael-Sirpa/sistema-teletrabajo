@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Enums\AcademicTitle;
 use App\Enums\RoleName;
 use App\Enums\UserStatus;
 use App\Models\OrganizationalUnit;
@@ -33,6 +34,7 @@ class UpdateUserRequest extends FormRequest
 
         return [
             'name' => ['required', 'string', 'max:255'],
+            'academic_title' => ['nullable', Rule::enum(AcademicTitle::class)],
             'email' => ['required', 'string', 'email', 'max:255'],
             'status' => ['required', Rule::enum(UserStatus::class)],
             'role' => ['required', Rule::enum(RoleName::class), Rule::in($allowedRoles)],

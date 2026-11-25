@@ -83,10 +83,7 @@ class DocumentRecipientEligibility
 
         if (! $unit
             || ! $unit->is_active
-            || ! in_array($unit->type, [
-                OrganizationalUnitType::CAREER,
-                OrganizationalUnitType::KARDEX,
-            ], true)) {
+            || $unit->type === OrganizationalUnitType::FACULTY) {
             throw ValidationException::withMessages([
                 'recipients' => 'Uno de los destinatarios pertenece a una unidad inactiva o no autorizada.',
             ]);
