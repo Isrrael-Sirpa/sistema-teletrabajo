@@ -6,6 +6,7 @@ Plataforma web institucional para la Facultad de Tecnología de la Universidad M
 
 - Fase 0: análisis arquitectónico aprobado y cerrado.
 - Fase 1: base Laravel implementada, probada y documentada.
+- Fase 2: esquema inicial implementado y validado en PostgreSQL 18.3.
 - Fase 2: esquema relacional institucional implementado y validado en MySQL 8.4 (Laragon) con todas las tablas del dominio nombradas en español.
 - Fase 3: autenticación básica implementada, probada y documentada.
 - Fase 4: roles y permisos implementados con RBAC y validados en PostgreSQL.
@@ -36,6 +37,8 @@ La página pública principal es el login institucional. Después de autenticar,
 ## Tecnologías
 
 - Laravel 13
+- PHP 8.5 como objetivo de producción (Laravel permite PHP 8.3+)
+- PostgreSQL 18
 - PHP 8.3+ (PHP 8.3 / 8.4)
 - MySQL 8.4 (Laragon / InnoDB) con tablas en español
 - Blade
@@ -47,11 +50,15 @@ La página pública principal es el login institucional. Después de autenticar,
 
 ## Requisitos de desarrollo
 
+- PHP 8.3 o superior con `PDO`, `pdo_pgsql` y `pgsql` (`intl` recomendada para herramientas y reportes)
 - PHP 8.3 o superior con `PDO`, `pdo_mysql` y extensiones estándar
 - Composer 2
+- Node.js compatible con Vite 7 y npm
+- PostgreSQL 18
 - Node.js compatible con Vite y npm
 - MySQL 8.0+ / 8.4 (disponible en Laragon)
 
+El entorno validado dispone de PHP 8.3.28, Node.js 24 y PostgreSQL 18.3. La instalación de PHP utilizada tiene habilitadas `PDO`, `pdo_pgsql` y `pgsql`. No use SQLite en producción.
 El entorno local de desarrollo opera sobre Laragon con MySQL 8.4.3 (`127.0.0.1:3306`, base de datos `sistema_teletrabajo`).
 
 ## Base de Datos y Tablas en Español
@@ -80,6 +87,8 @@ Todas las tablas de dominio institucional han sido configuradas y migradas en **
 ## Acceso
 
 - Login público: `/`
+- Panel provisional protegido: `/panel`
+- Sesiones almacenadas en PostgreSQL mediante `SESSION_DRIVER=database`
 - Panel operativo protegido: `/panel`
 - Sesiones almacenadas en MySQL mediante `SESSION_DRIVER=database` (tabla `sesiones`)
 - Solo los usuarios con estado `active` pueden autenticarse
